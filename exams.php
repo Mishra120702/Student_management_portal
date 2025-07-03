@@ -133,6 +133,8 @@ include '../sidebar.php';
         border-radius: 10px;
         box-shadow: 0 4px 20px rgba(0,0,0,0.15);
         border: 1px solid #e0e6ed;
+         max-height: 80vh;
+    overflow-y: auto;
     }
     
     .close {
