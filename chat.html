@@ -1,0 +1,861 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ASD Academy - Admin Chat</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-gray-100 h-screen flex">
+    <!-- Left Sidebar -->
+    <div class="w-80 bg-white border-r border-gray-200 flex flex-col h-full">
+        <!-- Header -->
+        <div class="p-4 border-b border-gray-200">
+            <h1 class="text-xl font-bold text-gray-800">Chat</h1>
+        </div>
+        
+        <!-- Search -->
+        <div class="p-3 border-b border-gray-200">
+            <div class="relative">
+                <input type="text" id="searchInput" placeholder="Search students..." 
+                       class="w-full pl-10 pr-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <i class="fas fa-search absolute left-3 top-3 text-gray-400"></i>
+            </div>
+        </div>
+        
+        <!-- Chat List -->
+        <div class="flex-1 overflow-y-auto" id="chatList">
+            <!-- General Announcements -->
+            <div class="p-3 border-b border-gray-200 hover:bg-gray-50 cursor-pointer chat-item" data-type="general">
+                <div class="flex items-center">
+                    <div class="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600">
+                        <i class="fas fa-bullhorn"></i>
+                    </div>
+                    <div class="ml-3">
+                        <h3 class="font-medium text-gray-900">General Announcements</h3>
+                        <p class="text-sm text-gray-500 truncate">System messages for everyone</p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Batch Chats Section -->
+            <div class="p-3 bg-gray-50">
+                <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Batch Chats</h3>
+            </div>
+            <div id="batchChats">
+                <!-- Dynamically populated with batches -->
+            </div>
+            
+            <!-- Individual Chats Section -->
+            <div class="p-3 bg-gray-50">
+                <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Individual Chats</h3>
+            </div>
+            <div id="studentChats">
+                <!-- Dynamically populated with students -->
+            </div>
+        </div>
+    </div>
+    
+    <!-- Main Chat Area -->
+    <div class="flex-1 flex flex-col h-full bg-white">
+        <!-- Chat Header -->
+        <div class="p-4 border-b border-gray-200 flex items-center justify-between" id="chatHeader">
+            <div class="flex items-center">
+                <div id="backButton" class="mr-2 cursor-pointer md:hidden">
+                    <i class="fas fa-arrow-left text-gray-600"></i>
+                </div>
+                <div id="chatInfo">
+                    <h2 class="text-lg font-semibold text-gray-800">Select a chat</h2>
+                    <p class="text-sm text-gray-500" id="statusInfo"></p>
+                </div>
+            </div>
+            <div class="flex items-center space-x-2">
+                <button id="callButton" class="p-2 rounded-full hover:bg-gray-100 hidden">
+                    <i class="fas fa-phone text-gray-600"></i>
+                </button>
+                <button id="videoCallButton" class="p-2 rounded-full hover:bg-gray-100 hidden">
+                    <i class="fas fa-video text-gray-600"></i>
+                </button>
+                <div class="relative">
+                    <button id="moreOptions" class="p-2 rounded-full hover:bg-gray-100">
+                        <i class="fas fa-ellipsis-v text-gray-600"></i>
+                    </button>
+                    <div id="optionsMenu" class="hidden absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg z-10">
+                        <div class="py-1">
+                            <a href="#" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" id="viewProfile">View Profile</a>
+                            <a href="#" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" id="muteChat">Mute Notifications</a>
+                            <a href="#" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" id="clearChat">Clear Chat</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Messages Area -->
+        <div class="flex-1 overflow-y-auto p-4 bg-gray-50" id="messagesContainer">
+            <div class="text-center text-gray-500 py-10" id="noChatSelected">
+                <i class="fas fa-comments text-4xl mb-2"></i>
+                <p>Select a chat to start messaging</p>
+            </div>
+            <div id="messagesList" class="hidden space-y-3"></div>
+        </div>
+        
+        <!-- Message Input Area -->
+        <div class="p-3 border-t border-gray-200 bg-white" id="messageInputArea" style="display: none;">
+            <div class="flex items-center">
+                <button id="attachButton" class="p-2 rounded-full hover:bg-gray-100 mr-1">
+                    <i class="fas fa-paperclip text-gray-600"></i>
+                </button>
+                <div class="relative flex-1">
+                    <input type="text" id="messageInput" placeholder="Type a message..." 
+                           class="w-full pl-4 pr-12 py-2 rounded-full border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <div class="absolute right-2 top-2 flex space-x-1">
+                        <button id="emojiButton" class="p-1 rounded-full hover:bg-gray-100">
+                            <i class="far fa-smile text-gray-600"></i>
+                        </button>
+                        <button id="sendButton" class="p-1 rounded-full hover:bg-gray-100">
+                            <i class="fas fa-paper-plane text-blue-600"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div id="attachmentOptions" class="hidden mt-2 p-2 bg-white border border-gray-200 rounded-lg shadow-lg">
+                <div class="grid grid-cols-4 gap-2">
+                    <button class="p-2 rounded hover:bg-gray-100 attachment-option" data-type="image">
+                        <i class="fas fa-image text-blue-500"></i>
+                        <span class="block text-xs mt-1">Photo</span>
+                    </button>
+                    <button class="p-2 rounded hover:bg-gray-100 attachment-option" data-type="video">
+                        <i class="fas fa-video text-blue-500"></i>
+                        <span class="block text-xs mt-1">Video</span>
+                    </button>
+                    <button class="p-2 rounded hover:bg-gray-100 attachment-option" data-type="document">
+                        <i class="fas fa-file-alt text-blue-500"></i>
+                        <span class="block text-xs mt-1">Document</span>
+                    </button>
+                    <button class="p-2 rounded hover:bg-gray-100 attachment-option" data-type="location">
+                        <i class="fas fa-map-marker-alt text-blue-500"></i>
+                        <span class="block text-xs mt-1">Location</span>
+                    </button>
+                    <button class="p-2 rounded hover:bg-gray-100 attachment-option" data-type="audio">
+                        <i class="fas fa-microphone text-blue-500"></i>
+                        <span class="block text-xs mt-1">Audio</span>
+                    </button>
+                    <button class="p-2 rounded hover:bg-gray-100 attachment-option" data-type="poll">
+                        <i class="fas fa-poll text-blue-500"></i>
+                        <span class="block text-xs mt-1">Poll</span>
+                    </button>
+                </div>
+            </div>
+            <div id="filePreview" class="hidden mt-2 p-2 bg-gray-100 rounded-lg">
+                <div class="flex items-center justify-between">
+                    <span id="fileName" class="text-sm font-medium"></span>
+                    <button id="cancelAttachment" class="text-red-500 hover:text-red-700">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Emoji Picker (hidden by default) -->
+    <div id="emojiPicker" class="hidden absolute bottom-20 right-4 w-64 h-64 bg-white border border-gray-200 rounded-lg shadow-lg overflow-y-auto z-10">
+        <div class="p-2 grid grid-cols-6 gap-1">
+            <!-- Emojis will be populated here -->
+        </div>
+    </div>
+
+    <!-- Location Picker Modal -->
+    <div id="locationModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-20">
+        <div class="bg-white rounded-lg w-full max-w-md">
+            <div class="p-4 border-b border-gray-200">
+                <h3 class="text-lg font-medium">Share Location</h3>
+            </div>
+            <div class="p-4">
+                <div id="map" class="h-64 bg-gray-200 mb-4"></div>
+                <div class="flex space-x-2">
+                    <button id="shareCurrentLocation" class="flex-1 bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700">
+                        Share Current Location
+                    </button>
+                    <button id="cancelLocation" class="bg-gray-200 text-gray-800 py-2 px-4 rounded-lg hover:bg-gray-300">
+                        Cancel
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Poll Creation Modal -->
+    <div id="pollModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-20">
+        <div class="bg-white rounded-lg w-full max-w-md">
+            <div class="p-4 border-b border-gray-200">
+                <h3 class="text-lg font-medium">Create Poll</h3>
+            </div>
+            <div class="p-4">
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Question</label>
+                    <input type="text" id="pollQuestion" class="w-full px-3 py-2 border border-gray-300 rounded-md">
+                </div>
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Options</label>
+                    <div id="pollOptions">
+                        <div class="flex mb-2">
+                            <input type="text" class="flex-1 px-3 py-2 border border-gray-300 rounded-md" placeholder="Option 1">
+                            <button class="ml-2 text-red-500 remove-option hidden">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                        <div class="flex mb-2">
+                            <input type="text" class="flex-1 px-3 py-2 border border-gray-300 rounded-md" placeholder="Option 2">
+                            <button class="ml-2 text-red-500 remove-option hidden">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <button id="addOption" class="text-blue-600 text-sm mt-1">
+                        <i class="fas fa-plus"></i> Add another option
+                    </button>
+                </div>
+                <div class="flex space-x-2">
+                    <button id="createPoll" class="flex-1 bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700">
+                        Create Poll
+                    </button>
+                    <button id="cancelPoll" class="bg-gray-200 text-gray-800 py-2 px-4 rounded-lg hover:bg-gray-300">
+                        Cancel
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Current chat state
+        let currentChat = {
+            type: null, // 'general', 'batch', or 'student'
+            id: null,   // batch_id or student_id
+            name: null,
+            isTyping: false,
+            typingTimer: null
+        };
+
+        // Polling interval for new messages
+        let pollingInterval = null;
+        const POLL_INTERVAL = 3000; // 3 seconds
+
+        // Initialize the chat interface
+        document.addEventListener('DOMContentLoaded', function() {
+            // Load initial data
+            loadBatches();
+            loadRecentChats();
+
+            // Set up event listeners
+            setupEventListeners();
+        });
+
+        function setupEventListeners() {
+            // Chat selection
+            document.querySelectorAll('.chat-item').forEach(item => {
+                item.addEventListener('click', function() {
+                    const type = this.dataset.type;
+                    const id = this.dataset.id || null;
+                    const name = this.dataset.name || this.querySelector('h3').textContent;
+                    
+                    selectChat(type, id, name);
+                });
+            });
+
+            // Back button for mobile
+            document.getElementById('backButton').addEventListener('click', function() {
+                document.querySelector('.w-80').classList.remove('hidden');
+                this.classList.add('hidden');
+            });
+
+            // Message input
+            document.getElementById('messageInput').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    sendMessage();
+                }
+            });
+
+            // Send button
+            document.getElementById('sendButton').addEventListener('click', sendMessage);
+
+            // Attach button
+            document.getElementById('attachButton').addEventListener('click', function() {
+                const options = document.getElementById('attachmentOptions');
+                options.classList.toggle('hidden');
+            });
+
+            // Attachment options
+            document.querySelectorAll('.attachment-option').forEach(option => {
+                option.addEventListener('click', function() {
+                    const type = this.dataset.type;
+                    handleAttachment(type);
+                });
+            });
+
+            // Emoji button
+            document.getElementById('emojiButton').addEventListener('click', function() {
+                const picker = document.getElementById('emojiPicker');
+                picker.classList.toggle('hidden');
+                
+                // TODO: Load emojis if not already loaded
+            });
+
+            // More options menu
+            document.getElementById('moreOptions').addEventListener('click', function() {
+                const menu = document.getElementById('optionsMenu');
+                menu.classList.toggle('hidden');
+            });
+
+            // Close menus when clicking elsewhere
+            document.addEventListener('click', function(e) {
+                if (!e.target.closest('#moreOptions') && !e.target.closest('#optionsMenu')) {
+                    document.getElementById('optionsMenu').classList.add('hidden');
+                }
+                
+                if (!e.target.closest('#attachButton') && !e.target.closest('#attachmentOptions')) {
+                    document.getElementById('attachmentOptions').classList.add('hidden');
+                }
+                
+                if (!e.target.closest('#emojiButton') && !e.target.closest('#emojiPicker')) {
+                    document.getElementById('emojiPicker').classList.add('hidden');
+                }
+            });
+
+            // Typing indicator
+            document.getElementById('messageInput').addEventListener('input', function() {
+                if (!currentChat.type) return;
+                
+                // Send typing indicator
+                if (!currentChat.isTyping) {
+                    currentChat.isTyping = true;
+                    sendTypingIndicator(true);
+                }
+                
+                // Reset typing indicator after 3 seconds of inactivity
+                clearTimeout(currentChat.typingTimer);
+                currentChat.typingTimer = setTimeout(() => {
+                    currentChat.isTyping = false;
+                    sendTypingIndicator(false);
+                }, 3000);
+            });
+        }
+
+        function selectChat(type, id, name) {
+            // Stop previous polling
+            if (pollingInterval) {
+                clearInterval(pollingInterval);
+            }
+            
+            // Update current chat
+            currentChat = { type, id, name };
+            
+            // Update UI
+            updateChatHeader(name, type);
+            document.getElementById('noChatSelected').classList.add('hidden');
+            document.getElementById('messagesList').classList.remove('hidden');
+            document.getElementById('messageInputArea').style.display = 'block';
+            
+            // Show/hide call buttons based on chat type
+            const callButton = document.getElementById('callButton');
+            const videoCallButton = document.getElementById('videoCallButton');
+            
+            if (type === 'student') {
+                callButton.classList.remove('hidden');
+                videoCallButton.classList.remove('hidden');
+            } else {
+                callButton.classList.add('hidden');
+                videoCallButton.classList.add('hidden');
+            }
+            
+            // Load messages
+            loadMessages();
+            
+            // Start polling for new messages
+            pollingInterval = setInterval(loadMessages, POLL_INTERVAL);
+            
+            // For mobile view
+            document.querySelector('.w-80').classList.add('hidden');
+            document.getElementById('backButton').classList.remove('hidden');
+        }
+
+        function updateChatHeader(name, type) {
+            document.querySelector('#chatInfo h2').textContent = name;
+            
+            // Update status info based on chat type
+            const statusInfo = document.getElementById('statusInfo');
+            if (type === 'general') {
+                statusInfo.textContent = 'System announcements';
+            } else if (type === 'batch') {
+                statusInfo.textContent = 'Batch chat';
+            } else {
+                // For individual chats, we'd fetch the user's status
+                statusInfo.textContent = 'Online'; // This would come from the server
+            }
+        }
+
+        function loadBatches() {
+    fetch('get_batches.php')
+        .then(response => {
+            // First, check if the response is OK
+            if (!response.ok) {
+                throw new Error('Network response was not ok');
+            }
+            return response.json();
+        })
+        .then(data => {
+            // Check if data is an array before using forEach
+            if (!Array.isArray(data)) {
+                console.error('Expected an array but got:', data);
+                throw new Error('Invalid data format received from server');
+            }
+
+            const container = document.getElementById('batchChats');
+            container.innerHTML = '';
+            
+            data.forEach(batch => {
+                const batchElement = document.createElement('div');
+                batchElement.className = 'p-3 border-b border-gray-200 hover:bg-gray-50 cursor-pointer chat-item';
+                batchElement.dataset.type = 'batch';
+                batchElement.dataset.id = batch.batch_id;
+                batchElement.dataset.name = batch.course_name + ' - ' + batch.batch_id;
+                
+                batchElement.innerHTML = `
+                    <div class="flex items-center">
+                        <div class="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center text-green-600">
+                            <i class="fas fa-users"></i>
+                        </div>
+                        <div class="ml-3 flex-1">
+                            <div class="flex justify-between items-center">
+                                <h3 class="font-medium text-gray-900">${batch.course_name} - ${batch.batch_id}</h3>
+                                <span class="text-xs text-gray-500">${batch.time_slot}</span>
+                            </div>
+                            <p class="text-sm text-gray-500 truncate">${batch.num_students} students</p>
+                        </div>
+                    </div>
+                `;
+                
+                container.appendChild(batchElement);
+                batchElement.addEventListener('click', function() {
+                    selectChat('batch', batch.batch_id, batch.course_name + ' - ' + batch.batch_id);
+                });
+            });
+        })
+        .catch(error => {
+            console.error('Error loading batches:', error);
+            // Show error message to user
+            const container = document.getElementById('batchChats');
+            container.innerHTML = `
+                <div class="p-4 text-center text-red-500">
+                    <i class="fas fa-exclamation-triangle mr-2"></i>
+                    Failed to load batches. Please try again later.
+                </div>
+            `;
+        });
+}
+function loadRecentChats() {
+    fetch('get_recent_chats.php')
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Network response was not ok');
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (!Array.isArray(data)) {
+                console.error('Expected an array but got:', data);
+                throw new Error('Invalid data format received from server');
+            }
+
+            const container = document.getElementById('studentChats');
+            container.innerHTML = '';
+            
+            data.forEach(chat => {
+                const chatElement = document.createElement('div');
+                chatElement.className = 'p-3 border-b border-gray-200 hover:bg-gray-50 cursor-pointer chat-item';
+                chatElement.dataset.type = 'student';
+                chatElement.dataset.id = chat.user_id;
+                chatElement.dataset.name = chat.name;
+                
+                // Show unread count if any
+                const unreadBadge = chat.unread_count > 0 ? 
+                    `<span class="ml-auto bg-blue-600 text-white text-xs px-2 py-1 rounded-full">${chat.unread_count}</span>` : '';
+                
+                chatElement.innerHTML = `
+                    <div class="flex items-center">
+                        <div class="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center text-purple-600">
+                            <i class="fas fa-user"></i>
+                        </div>
+                        <div class="ml-3 flex-1">
+                            <div class="flex justify-between items-center">
+                                <h3 class="font-medium text-gray-900">${chat.name}</h3>
+                                <span class="text-xs text-gray-500">${chat.last_message_time}</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <p class="text-sm text-gray-500 truncate">${chat.last_message || 'No messages yet'}</p>
+                                ${unreadBadge}
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                container.appendChild(chatElement);
+                chatElement.addEventListener('click', function() {
+                    selectChat('student', chat.user_id, chat.name);
+                });
+            });
+        })
+        .catch(error => {
+            console.error('Error loading recent chats:', error);
+            const container = document.getElementById('studentChats');
+            container.innerHTML = `
+                <div class="p-4 text-center text-red-500">
+                    <i class="fas fa-exclamation-triangle mr-2"></i>
+                    Failed to load recent chats. Please try again later.
+                </div>
+            `;
+        });
+}
+function loadMessages() {
+    if (!currentChat.type || !currentChat.id) return;
+    
+    fetch(`get_messages.php?type=${currentChat.type}&id=${currentChat.id}`)
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Network response was not ok');
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (!Array.isArray(data)) {
+                console.error('Expected an array but got:', data);
+                throw new Error('Invalid data format received from server');
+            }
+
+            const container = document.getElementById('messagesList');
+            container.innerHTML = '';
+            
+            data.forEach(message => {
+                const messageElement = document.createElement('div');
+                const isAdmin = message.sender_id === 1; // Assuming admin has ID 1
+                
+                messageElement.className = `flex ${isAdmin ? 'justify-end' : 'justify-start'}`;
+                
+                messageElement.innerHTML = `
+                    <div class="max-w-xs md:max-w-md lg:max-w-lg xl:max-w-xl rounded-lg px-4 py-2 
+                        ${isAdmin ? 'bg-blue-600 text-white' : 'bg-white border border-gray-200'}" 
+                        data-message-id="${message.message_id}">
+                        ${formatMessageContent(message)}
+                        <div class="flex justify-end items-center mt-1 space-x-2">
+                            <span class="text-xs ${isAdmin ? 'text-blue-100' : 'text-gray-500'}">
+                                ${formatTime(message.timestamp)}
+                            </span>
+                            ${isAdmin ? `
+                            <span class="text-xs ${message.is_read ? 'text-blue-100' : 'text-blue-300'}">
+                                ${message.is_read ? '✓✓' : '✓'}
+                            </span>
+                            ` : ''}
+                        </div>
+                    </div>
+                `;
+                
+                container.appendChild(messageElement);
+            });
+            
+            // Scroll to bottom
+            container.scrollTop = container.scrollHeight;
+        })
+        .catch(error => {
+            console.error('Error loading messages:', error);
+            const container = document.getElementById('messagesList');
+            container.innerHTML = `
+                <div class="text-center text-red-500 py-4">
+                    <i class="fas fa-exclamation-triangle mr-2"></i>
+                    Failed to load messages. Please try again.
+                </div>
+            `;
+        });
+}
+
+        function formatMessageContent(message) {
+            switch (message.message_type) {
+                case 'image':
+                    return `<img src="${message.file_path}" alt="Image" class="rounded-lg mb-1 max-h-64">`;
+                case 'video':
+                    return `
+                        <video controls class="rounded-lg mb-1 max-h-64">
+                            <source src="${message.file_path}" type="video/mp4">
+                            Your browser does not support the video tag.
+                        </video>
+                    `;
+                case 'document':
+                    return `
+                        <div class="flex items-center p-2 bg-${message.sender_id === 1 ? 'blue' : 'gray'}-100 rounded mb-1">
+                            <i class="fas fa-file-pdf text-red-500 mr-2"></i>
+                            <a href="${message.file_path}" target="_blank" class="text-sm font-medium">
+                                ${message.file_path.split('/').pop()}
+                            </a>
+                        </div>
+                    `;
+                case 'location':
+                    return `
+                        <div class="mb-1">
+                            <a href="https://maps.google.com/?q=${message.latitude},${message.longitude}" target="_blank" 
+                               class="inline-flex items-center text-${message.sender_id === 1 ? 'white' : 'blue'}-600">
+                                <i class="fas fa-map-marker-alt mr-1"></i>
+                                Shared Location
+                            </a>
+                            <div class="mt-1 bg-gray-200 h-32 rounded-lg">
+                                <!-- Map thumbnail would go here -->
+                            </div>
+                        </div>
+                    `;
+                case 'audio':
+                    return `
+                        <audio controls class="w-full mb-1">
+                            <source src="${message.file_path}" type="audio/mpeg">
+                            Your browser does not support the audio element.
+                        </audio>
+                    `;
+                default:
+                    return `<p class="whitespace-pre-wrap">${message.message_text}</p>`;
+            }
+        }
+
+        function formatTime(timestamp) {
+            const date = new Date(timestamp);
+            return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        }
+
+        function sendMessage() {
+            const input = document.getElementById('messageInput');
+            const message = input.value.trim();
+            
+            if (!message || !currentChat.type || !currentChat.id) return;
+            
+            // In a real app, this would be an AJAX call
+            fetch('send_message.php', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    type: currentChat.type,
+                    id: currentChat.id,
+                    message: message
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    input.value = '';
+                    loadMessages(); // Refresh messages
+                }
+            });
+        }
+
+        function sendTypingIndicator(isTyping) {
+            if (!currentChat.type || !currentChat.id) return;
+            
+            // In a real app, this would be an AJAX call
+            fetch('typing_indicator.php', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    type: currentChat.type,
+                    id: currentChat.id,
+                    is_typing: isTyping
+                })
+            });
+        }
+
+        function handleAttachment(type) {
+            document.getElementById('attachmentOptions').classList.add('hidden');
+            
+            switch (type) {
+                case 'image':
+                case 'video':
+                case 'document':
+                case 'audio':
+                    // Create a file input and trigger it
+                    const fileInput = document.createElement('input');
+                    fileInput.type = 'file';
+                    
+                    // Set accept attribute based on type
+                    if (type === 'image') fileInput.accept = 'image/*';
+                    else if (type === 'video') fileInput.accept = 'video/*';
+                    else if (type === 'document') fileInput.accept = '.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt';
+                    else if (type === 'audio') fileInput.accept = 'audio/*';
+                    
+                    fileInput.onchange = (e) => {
+                        const file = e.target.files[0];
+                        if (file) {
+                            // Show file preview
+                            const preview = document.getElementById('filePreview');
+                            const fileName = document.getElementById('fileName');
+                            
+                            fileName.textContent = file.name;
+                            preview.classList.remove('hidden');
+                            
+                            // In a real app, you would upload the file and then send the message
+                            // For now, we'll just simulate it
+                            setTimeout(() => {
+                                preview.classList.add('hidden');
+                                
+                                // Simulate sending the file
+                                fetch('send_message.php', {
+                                    method: 'POST',
+                                    headers: {
+                                        'Content-Type': 'application/json',
+                                    },
+                                    body: JSON.stringify({
+                                        type: currentChat.type,
+                                        id: currentChat.id,
+                                        message_type: type,
+                                        file_name: file.name,
+                                        file_size: file.size
+                                    })
+                                })
+                                .then(response => response.json())
+                                .then(data => {
+                                    if (data.success) {
+                                        loadMessages(); // Refresh messages
+                                    }
+                                });
+                            }, 1000);
+                        }
+                    };
+                    
+                    fileInput.click();
+                    break;
+                    
+                case 'location':
+                    document.getElementById('locationModal').classList.remove('hidden');
+                    break;
+                    
+                case 'poll':
+                    document.getElementById('pollModal').classList.remove('hidden');
+                    break;
+            }
+        }
+
+        // Set up location modal buttons
+        document.getElementById('shareCurrentLocation').addEventListener('click', function() {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(position => {
+                    const { latitude, longitude } = position.coords;
+                    
+                    // Simulate sending the location
+                    fetch('send_message.php', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            type: currentChat.type,
+                            id: currentChat.id,
+                            message_type: 'location',
+                            latitude: latitude,
+                            longitude: longitude
+                        })
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            document.getElementById('locationModal').classList.add('hidden');
+                            loadMessages(); // Refresh messages
+                        }
+                    });
+                });
+            } else {
+                alert('Geolocation is not supported by your browser');
+            }
+        });
+
+        document.getElementById('cancelLocation').addEventListener('click', function() {
+            document.getElementById('locationModal').classList.add('hidden');
+        });
+
+        // Set up poll modal buttons
+        document.getElementById('addOption').addEventListener('click', function() {
+            const optionsContainer = document.getElementById('pollOptions');
+            const optionCount = optionsContainer.children.length;
+            
+            const optionDiv = document.createElement('div');
+            optionDiv.className = 'flex mb-2';
+            optionDiv.innerHTML = `
+                <input type="text" class="flex-1 px-3 py-2 border border-gray-300 rounded-md" placeholder="Option ${optionCount + 1}">
+                <button class="ml-2 text-red-500 remove-option">
+                    <i class="fas fa-times"></i>
+                </button>
+            `;
+            
+            optionsContainer.appendChild(optionDiv);
+            
+            // Add event listener to remove button
+            optionDiv.querySelector('.remove-option').addEventListener('click', function() {
+                optionsContainer.removeChild(optionDiv);
+            });
+        });
+
+        document.getElementById('createPoll').addEventListener('click', function() {
+            const question = document.getElementById('pollQuestion').value.trim();
+            const options = Array.from(document.querySelectorAll('#pollOptions input'))
+                .map(input => input.value.trim())
+                .filter(opt => opt !== '');
+            
+            if (question === '' || options.length < 2) {
+                alert('Please enter a question and at least 2 options');
+                return;
+            }
+            
+            // Simulate sending the poll
+            fetch('send_message.php', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    type: currentChat.type,
+                    id: currentChat.id,
+                    message_type: 'poll',
+                    question: question,
+                    options: options
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    document.getElementById('pollModal').classList.add('hidden');
+                    loadMessages(); // Refresh messages
+                    
+                    // Reset poll form
+                    document.getElementById('pollQuestion').value = '';
+                    document.getElementById('pollOptions').innerHTML = `
+                        <div class="flex mb-2">
+                            <input type="text" class="flex-1 px-3 py-2 border border-gray-300 rounded-md" placeholder="Option 1">
+                            <button class="ml-2 text-red-500 remove-option hidden">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                        <div class="flex mb-2">
+                            <input type="text" class="flex-1 px-3 py-2 border border-gray-300 rounded-md" placeholder="Option 2">
+                            <button class="ml-2 text-red-500 remove-option hidden">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                    `;
+                }
+            });
+        });
+
+        document.getElementById('cancelPoll').addEventListener('click', function() {
+            document.getElementById('pollModal').classList.add('hidden');
+        });
+    </script>
+</body>
+</html>
