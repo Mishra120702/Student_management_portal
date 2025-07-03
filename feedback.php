@@ -299,12 +299,29 @@ $feedback = $stmt->fetchAll(PDO::FETCH_ASSOC);
         color: #e74c3c;
         font-weight: bold;
     }
+.font-bold{
+    padding-left:16rem;
+}
+    
 </style>
 </head>
 <body class="bg-gray-50 text-gray-800">
     <?php include '../header.php'; ?>
     <?php include '../sidebar.php'; ?>
     
+<!-- Unified Header (Desktop & Mobile) -->
+<header class="bg-white shadow-sm px-6 py-4 flex justify-between items-center sticky top-0 z-30">
+    <button class="md:hidden text-xl text-gray-600" onclick="toggleSidebar()">
+        <i class="fas fa-bars"></i>
+    </button>
+    <h1 class="text-2xl font-bold text-gray-800 flex items-center space-x-2">
+        <i class="fas fa-comment-dots text-blue-500"></i>
+        <span>Feedback System</span>
+    </h1>
+   
+</header>
+
+
     <!-- Mobile header -->
     <div class="md:hidden bg-white shadow-sm fixed w-full z-30">
         <div class="flex items-center justify-between p-4">
@@ -319,7 +336,7 @@ $feedback = $stmt->fetchAll(PDO::FETCH_ASSOC);
     </div>
     
     <div class="main-content pt-16 md:pt-0">
-        <h2 class="text-2xl font-bold">Feedback System</h2>
+        
         
         <!-- Feedback Submission Card -->
         <div class="card">
