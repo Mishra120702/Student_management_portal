@@ -111,10 +111,25 @@ $batches = $stmt->fetchAll(PDO::FETCH_ASSOC);
     <?php include '../header.php'; ?>
     <?php include '../sidebar.php'; ?>
     
-    <div class="ml-0 md:ml-64 p-4 min-h-screen">
-        <div class="container mx-auto">
+    <div class="flex-1 ml-0 md:ml-64 min-h-screen">
+    <!-- Header -->
+    <header class="bg-white shadow-sm px-6 py-4 flex justify-between items-center sticky top-0 z-30">
+        <button class="md:hidden text-xl text-gray-600" onclick="toggleSidebar()">
+            <i class="fas fa-bars"></i>
+        </button>
+        <h1 class="text-2xl font-bold text-gray-800 flex items-center space-x-2">
+            <i class="fas fa-chalkboard text-blue-500"></i>
+            <span>Batch Management</span>
+        </h1>
+        <div class="flex items-center space-x-4">
+            
+        </div>
+    </header>
+
+    <div class="p-4 md:p-6">
+
             <div class="action-bar">
-                <h2 class="text-2xl font-bold mb-4">Batch Management</h2>
+               
                 <button id="openModalBtn" class="btn-primary">
                     <i class="fas fa-plus"></i> Add New Batch
                 </button>
