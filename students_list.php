@@ -209,9 +209,9 @@ try {
                 <span>Student Directory</span>
             </h1>
             <div class="flex items-center space-x-4">
-                <a href="student_add.php" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center">
-                    <i class="fas fa-plus mr-2"></i> Add Student
-                </a>
+              <a href="add_student.php" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center">
+    <i class="fas fa-plus mr-2"></i> Add Student
+</a>
             </div>
         </header>
 
