@@ -57,10 +57,11 @@ if (isset($_POST['import'])) {
                 $check_batch->execute();
 
                 if ($check_batch->rowCount() === 0) {
+                    $check_batch = null;
                     $skipped[] = "Row " . ($i + 1) . ": Batch ID $batch_id not found";
                     continue;
                 }
-
+$check_batch = null;
                 // Insert into attendance table (PDO version)
                 $stmt = $db->prepare("INSERT INTO attendance (date, batch_id, student_name, status, camera_status, remarks) 
                                       VALUES (:date, :batch_id, :student_name, :status, :camera_status, :remarks)");
@@ -77,6 +78,8 @@ if (isset($_POST['import'])) {
                 } else {
                     $skipped[] = "Row " . ($i + 1) . ": " . implode(" ", $stmt->errorInfo());
                 }
+ $stmt = null;
+
             } catch (PDOException $e) {
                 $skipped[] = "Row " . ($i + 1) . ": " . $e->getMessage();
             }
@@ -87,16 +90,18 @@ if (isset($_POST['import'])) {
         if (!empty($skipped)) {
             $message .= " Skipped rows: " . implode(', ', $skipped);
         }
-
+$db = null;
         $_SESSION['import_message'] = $message;
         header("Location: ../dashboard/dashboard.php#attendance");
         exit;
     } else {
+        $db = null;
         $_SESSION['import_message'] = "Error uploading file.";
         header("Location: ../dashboard/dashboard.php#attendance");
         exit;
     }
 } else {
+    $db = null;
     $_SESSION['import_message'] = "Invalid request.";
     header("Location: ../dashboard/dashboard.php#attendance");
     exit;
