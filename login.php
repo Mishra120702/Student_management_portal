@@ -1,0 +1,316 @@
+<?php
+session_set_cookie_params([
+    'lifetime' => 0,
+    'path' => '/',
+    'domain' => $_SERVER['HTTP_HOST'],
+    'secure' => true,
+    'httponly' => true,
+    'samesite' => 'Strict'
+]);
+session_start();
+
+require_once 'db_connection.php';
+
+// CSRF token generation
+if (empty($_SESSION['csrf_token'])) {
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+}
+
+// Redirect if already logged in as student
+if (isset($_SESSION['user_id']) && $_SESSION['user_role'] === 'student') {
+    header("Location: stu_dash/dashboard.php");
+    exit;
+}
+
+// Login processing
+if (isset($_POST['login'])) {
+    if (!isset($_POST['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $_POST['csrf_token'])) {
+        $login_error = 'Invalid request. Please try again.';
+        error_log("CSRF token validation failed for student login attempt from IP: " . $_SERVER['REMOTE_ADDR']);
+    } else {
+        $username = filter_input(INPUT_POST, 'name', FILTER_SANITIZE_STRING);
+        $password = filter_input(INPUT_POST, 'password', FILTER_SANITIZE_STRING);
+        
+        if (empty($username) || empty($password)) {
+            $login_error = 'Please provide both username and password.';
+        } else {
+            // Rate limiting check
+            $stmt = $db->prepare("SELECT COUNT(*) FROM login_attempts 
+                                 WHERE ip_address = ? AND attempt_time > DATE_SUB(NOW(), INTERVAL 1 HOUR)");
+            $stmt->execute([$_SERVER['REMOTE_ADDR']]);
+            $attempts = $stmt->fetchColumn();
+            
+            if ($attempts > 10) {
+                $login_error = 'Too many login attempts. Please try again later.';
+                error_log("Rate limit exceeded for IP: " . $_SERVER['REMOTE_ADDR']);
+            } else {
+                // Record login attempt
+                $stmt = $db->prepare("INSERT INTO login_attempts (ip_address, attempt_time) VALUES (?, NOW())");
+                $stmt->execute([$_SERVER['REMOTE_ADDR']]);
+
+                $stmt = $db->prepare("SELECT * FROM users WHERE name = ? AND role = 'student'");
+                $stmt->execute([$username]);
+                $user = $stmt->fetch(PDO::FETCH_ASSOC);
+
+                if ($user) {
+                    if ($user['account_locked']) {
+                        $login_error = 'Account locked. Please contact administrator.';
+                    } else {
+                        if (password_verify($password, $user['password_hash'])) {
+                            // Reset failed attempts
+                            $db->prepare("UPDATE users SET failed_login_attempts = 0, last_failed_login = NULL WHERE id = ?")
+                               ->execute([$user['id']]);
+
+                            // Clear login attempts for this IP
+                            $db->prepare("DELETE FROM login_attempts WHERE ip_address = ?")
+                               ->execute([$_SERVER['REMOTE_ADDR']]);
+
+                            // Secure session handling
+                            session_regenerate_id(true);
+                            $_SESSION['user_id'] = $user['id'];
+                            $_SESSION['user_role'] = $user['role'];
+                            $_SESSION['user_name'] = $user['name'];
+                            $_SESSION['last_activity'] = time();
+
+                            header("Location: stu_dash/dashboard.php");
+                            exit;
+                        } else {
+                            // Rate limiting
+                            $attempts = $user['failed_login_attempts'] + 1;
+                            $max_attempts = $user['login_attempt_limit'] ?: 3;
+
+                            $db->prepare("UPDATE users SET failed_login_attempts = ?, last_failed_login = NOW() WHERE id = ?")
+                               ->execute([$attempts, $user['id']]);
+
+                            if ($attempts >= $max_attempts) {
+                                $db->prepare("UPDATE users SET account_locked = 1 WHERE id = ?")
+                                   ->execute([$user['id']]);
+                                $login_error = 'Too many failed attempts. Account locked.';
+                            } else {
+                                $login_error = 'Incorrect password. Attempt ' . $attempts . ' of ' . $max_attempts;
+                            }
+                        }
+                    }
+                } else {
+                    $login_error = 'Invalid credentials. Please try again.';
+                    sleep(1);
+                }
+            }
+        }
+    }
+}
+?>
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Login</title>
+    <!-- Same CSS as original login page -->
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: #333;
+            overflow: hidden;
+        }
+
+        .login-container {
+            background-color: white;
+            padding: 2.5rem;
+            border-radius: 10px;
+            box-shadow: 0 15px 30px rgba(0, 0, 0, 0.2);
+            width: 100%;
+            max-width: 400px;
+            transform-origin: bottom center;
+            animation: pinchOut 1s ease-out forwards;
+            opacity: 0;
+        }
+
+        @keyframes pinchOut {
+            0% {
+                transform: scale(0.1) translateY(100px);
+                opacity: 0;
+            }
+            50% {
+                transform: scale(1.05) translateY(-10px);
+                opacity: 1;
+            }
+            70% {
+                transform: scale(0.98);
+            }
+            100% {
+                transform: scale(1) translateY(0);
+                opacity: 1;
+            }
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 1.5rem;
+            color: #4a5568;
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+            position: relative;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+            color: #4a5568;
+        }
+
+        input {
+            width: 100%;
+            padding: 0.8rem;
+            border: 1px solid #e2e8f0;
+            border-radius: 5px;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2);
+        }
+
+        button {
+            width: 100%;
+            padding: 0.8rem;
+            background: linear-gradient(to right, #667eea, #764ba2);
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        button:hover {
+            background: linear-gradient(to right, #5a6fd1, #6a4299);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        .error-message {
+            color: #e53e3e;
+            text-align: center;
+            margin-top: 1rem;
+            font-size: 0.9rem;
+            animation: shake 0.5s;
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            20%, 60% { transform: translateX(-5px); }
+            40%, 80% { transform: translateX(5px); }
+        }
+
+        .brand {
+            text-align: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .brand h2 {
+            color: #667eea;
+            font-size: 1.8rem;
+            margin-bottom: 0.5rem;
+            animation: colorPulse 4s infinite alternate;
+        }
+
+        @keyframes colorPulse {
+            0% { color: #667eea; }
+            50% { color: #764ba2; }
+            100% { color: #667eea; }
+        }
+
+        .brand p {
+            color: #718096;
+            font-size: 0.9rem;
+        }
+
+        /* New styles for password toggle */
+        .password-wrapper {
+            position: relative;
+        }
+
+        .toggle-password {
+            position: absolute;
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            cursor: pointer;
+            color: #718096;
+        }
+
+        .toggle-password:hover {
+            color: #667eea;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <div class="brand">
+            <h2>ASD Academy Student Portal</h2>
+            <p>Student Sign In</p>
+        </div>
+        <form action="login.php" method="post" autocomplete="off">
+            <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8'); ?>">
+            <div class="form-group">
+                <label for="name">Student Name</label>
+                <input type="text" id="name" name="name" required placeholder="Enter student name" autocomplete="username">
+            </div>
+            
+            <div class="form-group">
+                <label for="password">Password</label>
+                <div class="password-wrapper">
+                    <input type="password" id="password" name="password" required placeholder="Enter your password" autocomplete="current-password">
+                    <span class="toggle-password" onclick="togglePasswordVisibility()">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                            <circle cx="12" cy="12" r="3"></circle>
+                        </svg>
+                    </span>
+                </div>
+            </div>
+            
+            <button type="submit" name="login">Login</button>
+        </form>
+        
+        <?php if (isset($login_error)): ?>
+            <div class="error-message"><?php echo htmlspecialchars($login_error, ENT_QUOTES, 'UTF-8'); ?></div>
+        <?php endif; ?>
+    </div>
+
+    <script>
+        function togglePasswordVisibility() {
+            const passwordInput = document.getElementById('password');
+            const toggleIcon = document.querySelector('.toggle-password svg');
+            
+            if (passwordInput.type === 'password') {
+                passwordInput.type = 'text';
+                toggleIcon.innerHTML = '<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line>';
+            } else {
+                passwordInput.type = 'password';
+                toggleIcon.innerHTML = '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle>';
+            }
+        }
+    </script>
+</body>
+</html>
