@@ -21,7 +21,7 @@ if (!isset($_SESSION['user_id']) || $_SESSION['user_role'] !== 'admin') {
             <i class="fas fa-users fa-log"></i>
             <span>Batch Management</span>
         </a>
-        <a href="../trainers/index.php" class="sidebar-link py-3 px-4 rounded-lg flex items-center space-x-3 hover:text-blue-500 <?= basename($_SERVER['PHP_SELF']) == 'admin_settings.php' ? 'active' : '' ?>">
+        <a href="../trainers/index.php" class="sidebar-link py-3 px-4 rounded-lg flex items-center space-x-3 hover:text-blue-500 <?= basename($_SERVER['PHP_SELF']) == '../trainers/index.php' ? 'active' : '' ?>">
             <i class="fas fa-trainer fa-log"></i>
             <span>Trainers</span>
         </a>
@@ -37,11 +37,15 @@ if (!isset($_SESSION['user_id']) || $_SESSION['user_role'] !== 'admin') {
             <i class="fas fa-file-alt fa-log"></i>
             <span>Exams</span>
         </a>
+        <a href="../workshops/workshop_list.php" class="sidebar-link py-3 px-4 rounded-lg flex items-center space-x-3 hover:text-blue-500 <?= basename($_SERVER['PHP_SELF']) == '../workshops/workshop_list.php' && basename(dirname($_SERVER['PHP_SELF'])) == 'workshops' ? 'active' : '' ?>">
+            <i class="fas fa-file-alt fa-log"></i>
+            <span>Workshops</span>
+        </a>
         <a href="../content/upload_content.php" class="sidebar-link py-3 px-4 rounded-lg flex items-center space-x-3 hover:text-blue-500 <?= basename($_SERVER['PHP_SELF']) == 'upload_content.php' ? 'active' : '' ?>">
             <i class="fas fa-book fa-log"></i>
             <span>Content</span>
         </a>
-        <a href="#" class="sidebar-link py-3 px-4 rounded-lg flex items-center space-x-3 hover:text-blue-500">
+        <a href="../reports/index.php" class="sidebar-link py-3 px-4 rounded-lg flex items-center space-x-3 hover:text-blue-500">
             <i class="fas fa-chart-bar fa-log"></i>
             <span>Reporting</span>
         </a>

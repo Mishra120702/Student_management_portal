@@ -54,6 +54,39 @@ $query = $db->prepare("
 $query->execute([$user_id, $student['student_id'], $student['batch_name']]);
 $conversations = $query->fetchAll(PDO::FETCH_ASSOC);
 
+// Validate conversation access if one is selected (now via POST)
+$active_conversation = null;
+if (isset($_POST['conversation_id'])) {
+    $conversation_id = intval($_POST['conversation_id']);
+    
+    // Check if user has access to this conversation
+    foreach ($conversations as $conv) {
+        if ($conv['id'] == $conversation_id) {
+            $active_conversation = $conv;
+            $_SESSION['active_conversation_id'] = $conversation_id; // Store in session
+            break;
+        }
+    }
+    
+    if (!$active_conversation) {
+        // User doesn't have access to this conversation
+        unset($_SESSION['active_conversation_id']);
+    }
+} elseif (isset($_SESSION['active_conversation_id'])) {
+    // Check if we have a conversation in session
+    $conversation_id = $_SESSION['active_conversation_id'];
+    foreach ($conversations as $conv) {
+        if ($conv['id'] == $conversation_id) {
+            $active_conversation = $conv;
+            break;
+        }
+    }
+    
+    if (!$active_conversation) {
+        unset($_SESSION['active_conversation_id']);
+    }
+}
+
 include 'header.php';
 ?>
 
@@ -85,24 +118,27 @@ include 'header.php';
                             $initials = substr($conv['name'], 0, 1);
                         }
                     ?>
-                        <a href="?conversation=<?= $conv['id'] ?>" 
-                           class="list-group-item list-group-item-action conversation-item <?= ($_GET['conversation'] ?? '') == $conv['id'] ? 'active' : '' ?>">
-                            <div class="d-flex align-items-center">
-                                <div class="conversation-avatar">
-                                    <?= strtoupper($initials) ?>
-                                </div>
-                                <div class="flex-grow-1">
-                                    <div class="d-flex justify-content-between align-items-center">
-                                        <h6 class="mb-0 conversation-name"><?= htmlspecialchars($conv['name']) ?></h6>
-                                        <small class="conversation-time"><?= $conv['last_message_time'] ? date('g:i A', strtotime($conv['last_message_time'])) : '' ?></small>
+                        <form method="POST" action="index.php" class="conversation-form">
+                            <input type="hidden" name="conversation_id" value="<?= $conv['id'] ?>">
+                            <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
+                            <button type="submit" class="list-group-item list-group-item-action conversation-item <?= ($active_conversation['id'] ?? '') == $conv['id'] ? 'active' : '' ?>">
+                                <div class="d-flex align-items-center">
+                                    <div class="conversation-avatar">
+                                        <?= strtoupper($initials) ?>
                                     </div>
-                                    <p class="mb-0 conversation-preview"><?= htmlspecialchars($conv['last_message'] ?? 'No messages yet') ?></p>
+                                    <div class="flex-grow-1">
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <h6 class="mb-0 conversation-name"><?= htmlspecialchars($conv['name']) ?></h6>
+                                            <small class="conversation-time"><?= $conv['last_message_time'] ? date('g:i A', strtotime($conv['last_message_time'])) : '' ?></small>
+                                        </div>
+                                        <p class="mb-0 conversation-preview"><?= htmlspecialchars($conv['last_message'] ?? 'No messages yet') ?></p>
+                                    </div>
+                                    <?php if ($conv['unread'] > 0): ?>
+                                        <span class="unread-badge ms-2"><?= $conv['unread'] ?></span>
+                                    <?php endif; ?>
                                 </div>
-                                <?php if ($conv['unread'] > 0): ?>
-                                    <span class="unread-badge ms-2"><?= $conv['unread'] ?></span>
-                                <?php endif; ?>
-                            </div>
-                        </a>
+                            </button>
+                        </form>
                     <?php endforeach; ?>
                 </div>
             <?php endif; ?>
@@ -110,9 +146,9 @@ include 'header.php';
         
         <!-- Chat Area -->
         <div class="col-md-8 chat-area">
-            <?php if (isset($_GET['conversation'])): 
-                $conversation_id = intval($_GET['conversation']);
-                $messages = getConversationMessages($conversation_id);
+            <?php if ($active_conversation): 
+                $conversation_id = $active_conversation['id'];
+                $messages = getConversationMessages($conversation_id, $user_id);
                 markMessagesAsRead($conversation_id, $user_id);
                 
                 // Group messages by date
@@ -126,7 +162,7 @@ include 'header.php';
                     <div class="conversation-avatar me-3">
                         <?php 
                             $initials = '';
-                            $convName = getConversationName($conversation_id);
+                            $convName = getConversationName($conversation_id, $user_id);
                             if (strpos($convName, 'Admin:') === 0) {
                                 $parts = explode(' ', substr($convName, 6));
                                 $initials = substr($parts[0], 0, 1) . (count($parts) > 1 ? substr($parts[1], 0, 1) : '');
@@ -165,7 +201,7 @@ include 'header.php';
                 </div>
                 
                 <div class="chat-input">
-                    <form id="messageForm" class="d-flex align-items-center gap-2">
+                    <form id="messageForm" class="d-flex align-items-center gap-2" method="POST">
                         <input type="hidden" name="conversation_id" value="<?= $conversation_id ?>">
                         <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
                         <input type="text" name="message" class="form-control message-input" placeholder="Type your message..." required>
@@ -287,7 +323,7 @@ $(document).ready(function() {
         const conversation_id = $('input[name="conversation_id"]').val();
         const last_message_id = $('#chatMessages .message').last().data('message-id') || 0;
         
-        $.get('ajax_get_messages.php', {
+        $.post('ajax_get_messages.php', {
             conversation_id: conversation_id,
             last_message_id: last_message_id
         }, function(data) {
@@ -359,15 +395,15 @@ $(document).ready(function() {
     
     // Function to update unread counts in conversation list
     function updateUnreadCounts() {
-        $.get('get_unread_counts.php', function(data) {
+        $.post('get_unread_counts.php', function(data) {
             if (data && data.conversations) {
                 data.conversations.forEach(conv => {
-                    const badge = $(`a[href*="conversation=${conv.id}"] .unread-badge`);
+                    const badge = $(`.conversation-form input[value="${conv.id}"]`).siblings('button').find('.unread-badge');
                     if (conv.unread > 0) {
                         if (badge.length) {
                             badge.text(conv.unread);
                         } else {
-                            $(`a[href*="conversation=${conv.id}"]`).append(
+                            $(`.conversation-form input[value="${conv.id}"]`).siblings('button').append(
                                 `<span class="unread-badge ms-2">${conv.unread}</span>`
                             );
                         }

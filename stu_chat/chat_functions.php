@@ -23,6 +23,13 @@ function getOrCreateStudentConversation($admin_id, $student_id) {
         return $conversation['id'];
     }
     
+    // Create new conversation
+    $insert = $db->prepare("
+        INSERT INTO chat_conversations (conversation_type, admin_id, student_id)
+        VALUES ('admin_student', ?, ?)
+    ");
+    $insert->execute([$admin_id, $student_id]);
+    
     return $db->lastInsertId();
 }
 
@@ -46,14 +53,39 @@ function getOrCreateBatchConversation($admin_id, $batch_id) {
         return $conversation['id'];
     }
     
+    // Create new conversation
+    $insert = $db->prepare("
+        INSERT INTO chat_conversations (conversation_type, admin_id, batch_id)
+        VALUES ('admin_batch', ?, ?)
+    ");
+    $insert->execute([$admin_id, $batch_id]);
+    
     return $db->lastInsertId();
 }
 
 /**
- * Get messages for a conversation
+ * Get messages for a conversation with access control
  */
-function getConversationMessages($conversation_id) {
+function getConversationMessages($conversation_id, $user_id) {
     global $db;
+    
+    // First verify user has access to this conversation
+    $query = $db->prepare("
+        SELECT c.id 
+        FROM chat_conversations c
+        WHERE c.id = ? 
+        AND (
+            (c.conversation_type = 'admin_student' AND c.student_id = (SELECT student_id FROM students WHERE user_id = ?))
+            OR 
+            (c.conversation_type = 'admin_batch' AND c.batch_id = (SELECT batch_name FROM students WHERE user_id = ?))
+        )
+    ");
+    $query->execute([$conversation_id, $user_id, $user_id]);
+    $conversation = $query->fetch(PDO::FETCH_ASSOC);
+    
+    if (!$conversation) {
+        return [];
+    }
     
     $query = $db->prepare("
         SELECT m.id, m.sender_id, m.message, m.sent_at, m.is_read, u.name as sender_name
@@ -68,10 +100,28 @@ function getConversationMessages($conversation_id) {
 }
 
 /**
- * Get conversation name/display title
+ * Get conversation name/display title with access control
  */
-function getConversationName($conversation_id) {
+function getConversationName($conversation_id, $user_id) {
     global $db;
+    
+    // First verify user has access to this conversation
+    $query = $db->prepare("
+        SELECT c.id 
+        FROM chat_conversations c
+        WHERE c.id = ? 
+        AND (
+            (c.conversation_type = 'admin_student' AND c.student_id = (SELECT student_id FROM students WHERE user_id = ?))
+            OR 
+            (c.conversation_type = 'admin_batch' AND c.batch_id = (SELECT batch_name FROM students WHERE user_id = ?))
+        )
+    ");
+    $query->execute([$conversation_id, $user_id, $user_id]);
+    $conversation = $query->fetch(PDO::FETCH_ASSOC);
+    
+    if (!$conversation) {
+        return 'Unauthorized Conversation';
+    }
     
     $query = $db->prepare("
         SELECT 
@@ -95,10 +145,28 @@ function getConversationName($conversation_id) {
 }
 
 /**
- * Mark messages as read for a user in a conversation
+ * Mark messages as read for a user in a conversation with access control
  */
 function markMessagesAsRead($conversation_id, $user_id) {
     global $db;
+    
+    // First verify user has access to this conversation
+    $query = $db->prepare("
+        SELECT c.id 
+        FROM chat_conversations c
+        WHERE c.id = ? 
+        AND (
+            (c.conversation_type = 'admin_student' AND c.student_id = (SELECT student_id FROM students WHERE user_id = ?))
+            OR 
+            (c.conversation_type = 'admin_batch' AND c.batch_id = (SELECT batch_name FROM students WHERE user_id = ?))
+        )
+    ");
+    $query->execute([$conversation_id, $user_id, $user_id]);
+    $conversation = $query->fetch(PDO::FETCH_ASSOC);
+    
+    if (!$conversation) {
+        return 0;
+    }
     
     $update = $db->prepare("
         UPDATE chat_messages 
@@ -113,10 +181,28 @@ function markMessagesAsRead($conversation_id, $user_id) {
 }
 
 /**
- * Send a new message to a conversation
+ * Send a new message to a conversation with access control
  */
 function sendMessage($conversation_id, $sender_id, $message) {
     global $db;
+    
+    // First verify user has access to this conversation
+    $query = $db->prepare("
+        SELECT c.id 
+        FROM chat_conversations c
+        WHERE c.id = ? 
+        AND (
+            (c.conversation_type = 'admin_student' AND c.student_id = (SELECT student_id FROM students WHERE user_id = ?))
+            OR 
+            (c.conversation_type = 'admin_batch' AND c.batch_id = (SELECT batch_name FROM students WHERE user_id = ?))
+        )
+    ");
+    $query->execute([$conversation_id, $sender_id, $sender_id]);
+    $conversation = $query->fetch(PDO::FETCH_ASSOC);
+    
+    if (!$conversation) {
+        return false;
+    }
     
     $insert = $db->prepare("
         INSERT INTO chat_messages (conversation_id, sender_id, message, sent_at)
@@ -130,7 +216,10 @@ function sendMessage($conversation_id, $sender_id, $message) {
     
     return false;
 }
-// In chat_functions.php, modify the functions to be checking-only:
+
+/**
+ * Check if student conversation exists (without creating)
+ */
 function getStudentConversation($admin_id, $student_id) {
     global $db;
     
@@ -146,6 +235,9 @@ function getStudentConversation($admin_id, $student_id) {
     return $conversation ? $conversation['id'] : null;
 }
 
+/**
+ * Check if batch conversation exists (without creating)
+ */
 function getBatchConversation($admin_id, $batch_id) {
     global $db;
     

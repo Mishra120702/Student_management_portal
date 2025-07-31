@@ -5,6 +5,7 @@ if (!isset($_SESSION['user_id']) || $_SESSION['user_role'] !== 'admin') {
     header("Location: ../login.php");
     exit;
 }
+
 // Handle form submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_student'])) {
     // Prepare student data
@@ -40,17 +41,80 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_student'])) {
             }
         }
     }
+    
     // Validate data
     $errors = validateStudentData($studentData);
     
     if (empty($errors)) {
         if (createStudent($db, $studentData)) {
+            // Send welcome email to student
+            $emailSent = sendWelcomeEmail($studentData);
+            
             // Redirect to dashboard with success message
-            header("Location: ../dashboard/dashboard.php?success=student_created");
+            $redirectParams = ['success' => 'student_created'];
+            if (!$emailSent) {
+                $redirectParams['email_status'] = 'failed';
+            }
+            header("Location: ../dashboard/dashboard.php?" . http_build_query($redirectParams));
             exit();
         } else {
             $errors[] = 'Failed to create student. Please try again.';
         }
+    }
+}
+
+function sendWelcomeEmail(array $studentData): bool {
+    $to = $studentData['email'];
+    $subject = 'Welcome to Our Institution';
+    
+    $message = "
+    <html>
+    <head>
+        <title>Welcome to Our Institution</title>
+        <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; }
+            .header { background-color: #3b82f6; color: white; padding: 20px; text-align: center; }
+            .content { padding: 20px; }
+            .footer { background-color: #f3f4f6; padding: 10px; text-align: center; font-size: 12px; }
+        </style>
+    </head>
+    <body>
+        <div class='header'>
+            <h1>Welcome to Our Institution</h1>
+        </div>
+        <div class='content'>
+            <p>Dear {$studentData['first_name']} {$studentData['last_name']},</p>
+            <p>We are pleased to inform you that your student account has been successfully created.</p>
+            <p>Here are your login details:</p>
+            <ul>
+                <li><strong>Email:</strong> {$studentData['email']}</li>
+                <li><strong>Password:</strong> The password you provided during registration</li>
+            </ul>
+            <p>Please keep this information secure and do not share it with anyone.</p>
+            <p>If you have any questions or need assistance, please don't hesitate to contact our support team.</p>
+            <p>Best regards,<br>The Administration Team</p>
+        </div>
+        <div class='footer'>
+            <p>This is an automated message. Please do not reply directly to this email.</p>
+        </div>
+    </body>
+    </html>
+    ";
+    
+    // Always set content-type when sending HTML email
+    $headers = "MIME-Version: 1.0\r\n";
+    $headers .= "Content-type: text/html; charset=UTF-8\r\n";
+    
+    // Additional headers
+    $headers .= "From: Your Institution <noreply@yourinstitution.com>\r\n";
+    $headers .= "Reply-To: support@yourinstitution.com\r\n";
+    $headers .= "X-Mailer: PHP/" . phpversion();
+    
+    try {
+        return mail($to, $subject, $message, $headers);
+    } catch (Exception $e) {
+        error_log("Email sending failed: " . $e->getMessage());
+        return false;
     }
 }
 
@@ -86,12 +150,12 @@ function createStudent(PDO $db, array $studentData): bool {
         // Generate student ID
         $studentId = generateStudentId($db);
         
-        // Create student record (without password_hash since it's in users table)
+        // Create student record (now including password_hash)
         $studentStmt = $db->prepare("INSERT INTO students (
             student_id, user_id, first_name, last_name, email, phone_number, 
-            date_of_birth, enrollment_date, current_status,
-            father_name, father_phone_number, father_email
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, CURDATE(), 'active', ?, ?, ?)");
+            date_of_birth, enrollment_date, current_status, password_hash,
+            father_name, father_phone_number, father_email, profile_picture
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, CURDATE(), 'active', ?, ?, ?, ?, ?)");
         
         $result = $studentStmt->execute([
             $studentId,
@@ -101,9 +165,11 @@ function createStudent(PDO $db, array $studentData): bool {
             $studentData['email'],
             $studentData['phone_number'],
             $studentData['date_of_birth'],
+            $studentData['password'], // Insert the hashed password here
             $studentData['father_name'],
             $studentData['father_phone_number'],
-            $studentData['father_email']
+            $studentData['father_email'],
+            $studentData['profile_picture']
         ]);
         
         $db->commit();

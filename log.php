@@ -43,78 +43,114 @@ if (!$adminExists) {
     $stmt->execute([$userId, $name, $role, $email, $hashedPassword]);
 }
 
+// reCAPTCHA configuration
+define('RECAPTCHA_SITE_KEY', '6Lf3WpArAAAAAIinUlWRcEyfBQ6Ed3WUA8bluhsK');
+define('RECAPTCHA_SECRET_KEY', '6Lf3WpArAAAAAHNleWLcOVlbHicLcXFR_3uHcq30');
+
 // Login processing
 if (isset($_POST['login'])) {
     if (!isset($_POST['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $_POST['csrf_token'])) {
         $login_error = 'Invalid request. Please try again.';
         error_log("CSRF token validation failed for admin login attempt from IP: " . $_SERVER['REMOTE_ADDR']);
     } else {
-        $username = filter_input(INPUT_POST, 'name', FILTER_SANITIZE_STRING);
-        $password = filter_input(INPUT_POST, 'password', FILTER_SANITIZE_STRING);
-        
-        if (empty($username) || empty($password)) {
-            $login_error = 'Please provide both username and password.';
+        // reCAPTCHA verification
+        if (!isset($_POST['g-recaptcha-response'])) {
+            $login_error = 'Please complete the reCAPTCHA verification.';
         } else {
-            // Rate limiting check
-            $stmt = $db->prepare("SELECT COUNT(*) FROM login_attempts 
-                                 WHERE ip_address = ? AND attempt_time > DATE_SUB(NOW(), INTERVAL 1 HOUR)");
-            $stmt->execute([$_SERVER['REMOTE_ADDR']]);
-            $attempts = $stmt->fetchColumn();
+            $recaptcha_response = $_POST['g-recaptcha-response'];
             
-            if ($attempts > 10) {
-                $login_error = 'Too many login attempts. Please try again later.';
-                error_log("Rate limit exceeded for IP: " . $_SERVER['REMOTE_ADDR']);
+            // Verify with Google
+            $recaptcha_url = 'https://www.google.com/recaptcha/api/siteverify';
+            $recaptcha_data = [
+                'secret' => RECAPTCHA_SECRET_KEY,
+                'response' => $recaptcha_response,
+                'remoteip' => $_SERVER['REMOTE_ADDR']
+            ];
+            
+            $options = [
+                'http' => [
+                    'header' => "Content-type: application/x-www-form-urlencoded\r\n",
+                    'method' => 'POST',
+                    'content' => http_build_query($recaptcha_data)
+                ]
+            ];
+            
+            $context = stream_context_create($options);
+            $result = file_get_contents($recaptcha_url, false, $context);
+            $response = json_decode($result);
+            
+            if (!$response->success) {
+                $login_error = 'reCAPTCHA verification failed. Please try again.';
+                error_log("reCAPTCHA failed for IP: " . $_SERVER['REMOTE_ADDR'] . " Errors: " . implode(", ", $response->{'error-codes'}));
             } else {
-                // Record login attempt
-                $stmt = $db->prepare("INSERT INTO login_attempts (ip_address, attempt_time) VALUES (?, NOW())");
-                $stmt->execute([$_SERVER['REMOTE_ADDR']]);
-
-                $stmt = $db->prepare("SELECT * FROM users WHERE name = ? AND role = 'admin'");
-                $stmt->execute([$username]);
-                $user = $stmt->fetch(PDO::FETCH_ASSOC);
-
-                if ($user) {
-                    if ($user['account_locked']) {
-                        $login_error = 'Account locked. Please contact administrator.';
+                $username = filter_input(INPUT_POST, 'name', FILTER_SANITIZE_STRING);
+                $password = filter_input(INPUT_POST, 'password', FILTER_SANITIZE_STRING);
+                
+                if (empty($username) || empty($password)) {
+                    $login_error = 'Please provide both username and password.';
+                } else {
+                    // Rate limiting check
+                    $stmt = $db->prepare("SELECT COUNT(*) FROM login_attempts 
+                                         WHERE ip_address = ? AND attempt_time > DATE_SUB(NOW(), INTERVAL 1 HOUR)");
+                    $stmt->execute([$_SERVER['REMOTE_ADDR']]);
+                    $attempts = $stmt->fetchColumn();
+                    
+                    if ($attempts > 10) {
+                        $login_error = 'Too many login attempts. Please try again later.';
+                        error_log("Rate limit exceeded for IP: " . $_SERVER['REMOTE_ADDR']);
                     } else {
-                        if (password_verify($password, $user['password_hash'])) {
-                            // Reset failed attempts
-                            $db->prepare("UPDATE users SET failed_login_attempts = 0, last_failed_login = NULL WHERE id = ?")
-                               ->execute([$user['id']]);
+                        // Record login attempt
+                        $stmt = $db->prepare("INSERT INTO login_attempts (ip_address, attempt_time) VALUES (?, NOW())");
+                        $stmt->execute([$_SERVER['REMOTE_ADDR']]);
 
-                            // Clear login attempts for this IP
-                            $db->prepare("DELETE FROM login_attempts WHERE ip_address = ?")
-                               ->execute([$_SERVER['REMOTE_ADDR']]);
+                        $stmt = $db->prepare("SELECT * FROM users WHERE name = ? AND role = 'admin'");
+                        $stmt->execute([$username]);
+                        $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
-                            // Secure session handling
-                            session_regenerate_id(true);
-                            $_SESSION['user_id'] = $user['id'];
-                            $_SESSION['user_role'] = $user['role'];
-                            $_SESSION['user_name'] = $user['name'];
-                            $_SESSION['last_activity'] = time();
-
-                            header("Location: dashboard/dashboard.php");
-                            exit;
-                        } else {
-                            // Rate limiting
-                            $attempts = $user['failed_login_attempts'] + 1;
-                            $max_attempts = $user['login_attempt_limit'] ?: 3;
-
-                            $db->prepare("UPDATE users SET failed_login_attempts = ?, last_failed_login = NOW() WHERE id = ?")
-                               ->execute([$attempts, $user['id']]);
-
-                            if ($attempts >= $max_attempts) {
-                                $db->prepare("UPDATE users SET account_locked = 1 WHERE id = ?")
-                                   ->execute([$user['id']]);
-                                $login_error = 'Too many failed attempts. Account locked.';
+                        if ($user) {
+                            if ($user['account_locked']) {
+                                $login_error = 'Account locked. Please contact administrator.';
                             } else {
-                                $login_error = 'Incorrect password. Attempt ' . $attempts . ' of ' . $max_attempts;
+                                if (password_verify($password, $user['password_hash'])) {
+                                    // Reset failed attempts
+                                    $db->prepare("UPDATE users SET failed_login_attempts = 0, last_failed_login = NULL WHERE id = ?")
+                                       ->execute([$user['id']]);
+
+                                    // Clear login attempts for this IP
+                                    $db->prepare("DELETE FROM login_attempts WHERE ip_address = ?")
+                                       ->execute([$_SERVER['REMOTE_ADDR']]);
+
+                                    // Secure session handling
+                                    session_regenerate_id(true);
+                                    $_SESSION['user_id'] = $user['id'];
+                                    $_SESSION['user_role'] = $user['role'];
+                                    $_SESSION['user_name'] = $user['name'];
+                                    $_SESSION['last_activity'] = time();
+
+                                    header("Location: dashboard/dashboard.php");
+                                    exit;
+                                } else {
+                                    // Rate limiting
+                                    $attempts = $user['failed_login_attempts'] + 1;
+                                    $max_attempts = $user['login_attempt_limit'] ?: 3;
+
+                                    $db->prepare("UPDATE users SET failed_login_attempts = ?, last_failed_login = NOW() WHERE id = ?")
+                                       ->execute([$attempts, $user['id']]);
+
+                                    if ($attempts >= $max_attempts) {
+                                        $db->prepare("UPDATE users SET account_locked = 1 WHERE id = ?")
+                                           ->execute([$user['id']]);
+                                        $login_error = 'Too many failed attempts. Account locked.';
+                                    } else {
+                                        $login_error = 'Incorrect password. Attempt ' . $attempts . ' of ' . $max_attempts;
+                                    }
+                                }
                             }
+                        } else {
+                            $login_error = 'Invalid credentials. Please try again.';
+                            sleep(1);
                         }
                     }
-                } else {
-                    $login_error = 'Invalid credentials. Please try again.';
-                    sleep(1);
                 }
             }
         }
@@ -128,7 +164,8 @@ if (isset($_POST['login'])) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin Login</title>
-    <!-- Same CSS as original login page -->
+    <!-- reCAPTCHA API -->
+    <script src="https://www.google.com/recaptcha/api.js" async defer></script>
     <style>
         * {
             margin: 0;
@@ -266,7 +303,6 @@ if (isset($_POST['login'])) {
             font-size: 0.9rem;
         }
 
-        /* New styles for password toggle */
         .password-wrapper {
             position: relative;
         }
@@ -283,6 +319,14 @@ if (isset($_POST['login'])) {
         .toggle-password:hover {
             color: #667eea;
         }
+
+        .g-recaptcha {
+            margin: 1.5rem 0;
+            display: flex;
+            justify-content: center;
+            transform: scale(0.9);
+            transform-origin: center;
+        }
     </style>
 </head>
 <body>
@@ -293,6 +337,7 @@ if (isset($_POST['login'])) {
         </div>
         <form action="log.php" method="post" autocomplete="off">
             <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8'); ?>">
+            
             <div class="form-group">
                 <label for="name">Admin Name</label>
                 <input type="text" id="name" name="name" required placeholder="Enter admin name" autocomplete="username">
@@ -311,12 +356,15 @@ if (isset($_POST['login'])) {
                 </div>
             </div>
             
+            <!-- reCAPTCHA Widget -->
+            <div class="g-recaptcha" data-sitekey="6Lf3WpArAAAAAIinUlWRcEyfBQ6Ed3WUA8bluhsK"></div>
+            
             <button type="submit" name="login">Login</button>
+            
+            <?php if (isset($login_error)): ?>
+                <div class="error-message"><?php echo htmlspecialchars($login_error, ENT_QUOTES, 'UTF-8'); ?></div>
+            <?php endif; ?>
         </form>
-        
-        <?php if (isset($login_error)): ?>
-            <div class="error-message"><?php echo htmlspecialchars($login_error, ENT_QUOTES, 'UTF-8'); ?></div>
-        <?php endif; ?>
     </div>
 
     <script>

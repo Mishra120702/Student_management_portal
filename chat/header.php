@@ -98,198 +98,137 @@
             color: rgba(255, 255, 255, 0.7);
         }
         
-        .conversation-item {
+        /* Enhanced attachment styling */
+        .attachment {
+            border: 1px solid rgba(0,0,0,0.1);
+            border-radius: 8px;
+            padding: 10px;
+            margin-top: 8px;
+            background-color: rgba(255,255,255,0.5);
             transition: all 0.2s;
-            border-left: 3px solid transparent;
-            cursor: pointer;
         }
         
-        .conversation-item:hover {
+        .message-out .attachment {
+            background-color: rgba(67, 97, 238, 0.1);
+            border-color: rgba(67, 97, 238, 0.3);
+        }
+        
+        .attachment:hover {
             background-color: rgba(67, 97, 238, 0.05);
-            border-left-color: var(--primary-color);
+            border-color: rgba(67, 97, 238, 0.5);
         }
         
-        .conversation-item.active {
-            background-color: rgba(67, 97, 238, 0.1);
-            border-left-color: var(--primary-color);
-        }
-        
-        .unread-badge {
-            background-color: var(--danger-color);
-            animation: pulse 1.5s infinite;
-        }
-        
-        .chat-input {
-            border-top: 1px solid #eee;
-            background-color: white;
-            padding: 15px;
-        }
-        
-        .chat-input .form-control {
-            border-radius: 20px;
-            padding: 10px 20px;
-            border: 1px solid #ddd;
-            transition: all 0.3s;
-        }
-        
-        .chat-input .form-control:focus {
-            border-color: var(--primary-color);
-            box-shadow: 0 0 0 0.25rem rgba(67, 97, 238, 0.25);
-        }
-        
-        .chat-input .btn {
-            border-radius: 20px;
-            padding: 10px 20px;
-            font-weight: 500;
-            transition: all 0.3s;
-        }
-        
-        .search-box {
-            position: relative;
-        }
-        
-        .search-box i {
-            position: absolute;
-            left: 15px;
-            top: 50%;
-            transform: translateY(-50%);
-            color: var(--light-text);
-        }
-        
-        .search-box input {
-            padding-left: 40px;
-        }
-        
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        
-        @keyframes pulse {
-            0% { transform: scale(1); }
-            50% { transform: scale(1.1); }
-            100% { transform: scale(1); }
-        }
-        
-        .typing-indicator {
-            display: inline-flex;
-            padding: 8px 12px;
-            background-color: #f1f3f9;
-            border-radius: 18px;
-            margin-bottom: 15px;
-        }
-        
-        .typing-dot {
-            width: 8px;
-            height: 8px;
-            background-color: var(--light-text);
-            border-radius: 50%;
-            margin: 0 2px;
-            animation: typingAnimation 1.4s infinite ease-in-out;
-        }
-        
-        .typing-dot:nth-child(1) { animation-delay: 0s; }
-        .typing-dot:nth-child(2) { animation-delay: 0.2s; }
-        .typing-dot:nth-child(3) { animation-delay: 0.4s; }
-        
-        @keyframes typingAnimation {
-            0%, 60%, 100% { transform: translateY(0); }
-            30% { transform: translateY(-5px); }
-        }
-        
-        .sidebar-link.active {
-            background-color: rgba(67, 97, 238, 0.1);
-            color: var(--primary-color) !important;
-            font-weight: 500;
-            border-left: 3px solid var(--primary-color);
-        }
-        
-        .sidebar-link.active i {
-            color: var(--primary-color) !important;
-        }
-        
-        .floating-btn {
-            position: fixed;
-            bottom: 30px;
-            right: 30px;
-            width: 60px;
-            height: 60px;
-            border-radius: 50%;
-            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
-            color: white;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            box-shadow: 0 5px 20px rgba(67, 97, 238, 0.3);
-            z-index: 1000;
-            cursor: pointer;
-            transition: all 0.3s;
-        }
-        
-        .floating-btn:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 8px 25px rgba(67, 97, 238, 0.4);
-        }
-        
-        .user-avatar {
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            background-color: var(--primary-color);
-            color: white;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: bold;
+        .attachment-icon {
+            font-size: 1.5rem;
             margin-right: 10px;
         }
         
-        .conversation-avatar {
-            width: 50px;
-            height: 50px;
-            border-radius: 50%;
-            background-color: #e9ecef;
-            color: var(--primary-color);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: bold;
-            margin-right: 15px;
-            font-size: 1.2rem;
-        }
-        
-        .conversation-name {
+        .attachment-name {
             font-weight: 500;
-            color: black;
-            margin-bottom: 3px;
-        }
-        
-        .conversation-preview {
-            font-size: 0.85rem;
-            color: var(--light-text);
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
+            max-width: 200px;
         }
         
-        /* Custom scrollbar */
-        ::-webkit-scrollbar {
-            width: 8px;
+        /* Attachment type colors */
+        .attachment-pdf {
+            color: #e74c3c;
         }
         
-        ::-webkit-scrollbar-track {
-            background: #f1f1f1;
-            border-radius: 10px;
+        .attachment-image {
+            color: #3498db;
         }
         
-        ::-webkit-scrollbar-thumb {
-            background: #c1c1c1;
-            border-radius: 10px;
+        .attachment-doc {
+            color: #2c3e50;
         }
         
-        ::-webkit-scrollbar-thumb:hover {
-            background: #a8a8a8;
+        .attachment-xls {
+            color: #27ae60;
         }
+        
+        .attachment-ppt {
+            color: #e67e22;
+        }
+        
+        .attachment-zip {
+            color: #9b59b6;
+        }
+        
+        /* Message actions */
+        .message-actions {
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+        
+        .message:hover .message-actions {
+            opacity: 1;
+        }
+        
+        .message-actions .dropdown-toggle::after {
+            display: none;
+        }
+        
+        .message-actions .btn-link {
+            color: rgba(255,255,255,0.7);
+            padding: 2px 5px;
+        }
+        
+        .message-in .message-actions .btn-link {
+            color: rgba(0,0,0,0.4);
+        }
+        
+        /* File preview section */
+        .file-preview {
+            border: 1px dashed #dee2e6;
+            border-radius: 8px;
+            padding: 10px;
+            margin-bottom: 10px;
+            background-color: #f8f9fa;
+            transition: all 0.2s;
+        }
+        
+        .file-preview:hover {
+            background-color: #e9ecef;
+        }
+        
+        .file-info {
+            flex-grow: 1;
+            min-width: 0;
+        }
+        
+        /* Improved message bubbles with actions */
+        .message-bubble {
+            position: relative;
+            padding-right: 30px; /* Space for action menu */
+        }
+        
+        /* Better tooltip styling */
+        .tooltip-inner {
+            max-width: 300px;
+            padding: 8px 12px;
+        }
+        
+        /* Preview modal styling */
+        .preview-container {
+            width: 100%;
+            height: 70vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .preview-container img {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+        }
+        
+        /* Rest of your existing styles... */
     </style>
 </head>
 <body class="bg-gray-50 text-gray-800">

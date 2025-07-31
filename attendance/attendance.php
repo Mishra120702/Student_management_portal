@@ -6,12 +6,19 @@ if (!isset($_SESSION['user_id'])) {
     header("Location: ../login.php");
     exit;
 }
+
 // Check if batch_id is provided in URL
 $preselected_batch = isset($_GET['batch_id']) ? $_GET['batch_id'] : '';
 $preselected_date = isset($_GET['date']) ? $_GET['date'] : '';
+
 // Get all batches for the filter dropdown
-$stmt = $db->query("SELECT batch_id, course_name FROM batches");
-$batches = $stmt->fetchAll(PDO::FETCH_ASSOC);
+try {
+    $stmt = $db->query("SELECT batch_id, course_name FROM batches");
+    $batches = $stmt->fetchAll(PDO::FETCH_ASSOC);
+} catch (PDOException $e) {
+    error_log("Database error fetching batches: " . $e->getMessage());
+    $batches = [];
+}
 
 // Handle file upload if submitted
 if (isset($_POST['import'])) {
@@ -27,29 +34,38 @@ if (isset($_POST['create_attendance'])) {
     $batch_id = $_POST['batch_id'];
     $date = $_POST['date'];
     
-    // Check if attendance already exists for this batch and date
-    $stmt = $db->prepare("SELECT COUNT(*) FROM attendance WHERE batch_id = ? AND date = ?");
-    $stmt->execute([$batch_id, $date]);
-    $count = $stmt->fetchColumn();
-    
-    if ($count > 0) {
-        $_SESSION['error_message'] = "Attendance already exists for batch $batch_id on $date";
-    } else {
-        // Get all students in this batch
-        $stmt = $db->prepare("SELECT CONCAT(first_name, ' ', last_name) as student_name 
-                             FROM students 
-                             WHERE batch_name = ?");
-        $stmt->execute([$batch_id]);
-        $students = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    try {
+        // Check if attendance already exists for this batch and date
+        $stmt = $db->prepare("SELECT COUNT(*) FROM attendance WHERE batch_id = ? AND date = ?");
+        $stmt->execute([$batch_id, $date]);
+        $count = $stmt->fetchColumn();
         
-        // Insert attendance records for each student (default to Absent and Camera Off)
-        foreach ($students as $student) {
-            $stmt = $db->prepare("INSERT INTO attendance (date, batch_id, student_name, status, camera_status) 
-                                 VALUES (?, ?, ?, 'Absent', 'Off')");
-            $stmt->execute([$date, $batch_id, $student['student_name']]);
+        if ($count > 0) {
+            $_SESSION['error_message'] = "Attendance already exists for batch $batch_id on $date";
+        } else {
+            // Get all students in this batch
+            $stmt = $db->prepare("SELECT CONCAT(first_name, ' ', last_name) as student_name 
+                                 FROM students 
+                                 WHERE batch_name = ?");
+            $stmt->execute([$batch_id]);
+            $students = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            
+            if (empty($students)) {
+                $_SESSION['error_message'] = "No students found in batch $batch_id";
+            } else {
+                // Insert attendance records for each student (default to Absent and Camera Off)
+                foreach ($students as $student) {
+                    $stmt = $db->prepare("INSERT INTO attendance (date, batch_id, student_name, status, camera_status) 
+                                         VALUES (?, ?, ?, 'Absent', 'Off')");
+                    $stmt->execute([$date, $batch_id, $student['student_name']]);
+                }
+                
+                $_SESSION['success_message'] = "New attendance created for batch $batch_id on $date with all students marked as Absent";
+            }
         }
-        
-        $_SESSION['success_message'] = "New attendance created for batch $batch_id on $date with all students marked as Absent";
+    } catch (PDOException $e) {
+        error_log("Database error creating attendance: " . $e->getMessage());
+        $_SESSION['error_message'] = "Database error occurred while creating attendance";
     }
     
     header("Location: attendance.php");
@@ -461,6 +477,23 @@ if (isset($_POST['create_attendance'])) {
         </header>
 
         <div class="p-4 md:p-6">
+            <!-- Display error/success messages -->
+            <?php if (isset($_SESSION['error_message'])): ?>
+                <div class="alert alert-error mb-4 animate__animated animate__fadeIn">
+                    <i class="fas fa-exclamation-circle mr-2"></i>
+                    <?= htmlspecialchars($_SESSION['error_message']); ?>
+                    <?php unset($_SESSION['error_message']); ?>
+                </div>
+            <?php endif; ?>
+            
+            <?php if (isset($_SESSION['success_message'])): ?>
+                <div class="alert alert-success mb-4 animate__animated animate__fadeIn">
+                    <i class="fas fa-check-circle mr-2"></i>
+                    <?= htmlspecialchars($_SESSION['success_message']); ?>
+                    <?php unset($_SESSION['success_message']); ?>
+                </div>
+            <?php endif; ?>
+
             <!-- Toggle buttons -->
             <div class="toggle-buttons animate__animated animate__fadeIn">
                 <button id="showManualBtn" class="toggle-btn active">
@@ -502,6 +535,11 @@ if (isset($_POST['create_attendance'])) {
                 
                 <!-- Attendance Table Card -->
                 <div class="card animate__animated animate__fadeInUp animate__delay-1s">
+                    <div id="attendanceError" class="hidden alert alert-error mb-4">
+                        <i class="fas fa-exclamation-circle mr-2"></i>
+                        <span id="errorMessage">Error loading attendance data</span>
+                    </div>
+                    
                     <table id="attendanceTable" class="display" style="width:100%">
                         <thead>
                             <tr>
@@ -720,7 +758,7 @@ if (isset($_POST['create_attendance'])) {
     </div>
 
     <!-- Loading Modal -->
-    <div id="loadingModal" class="modal-overlay">
+        <div id="loadingModal" class="modal-overlay">
         <div class="modal-content flex flex-col items-center justify-center p-8">
             <div class="spinner mb-4"></div>
             <h3 class="text-lg font-medium text-gray-800">Processing...</h3>
@@ -751,6 +789,17 @@ if (isset($_POST['create_attendance'])) {
         // Hide loading modal
         function hideLoading() {
             $('#loadingModal').removeClass('active');
+        }
+        
+        // Show error message
+        function showError(message) {
+            $('#errorMessage').text(message);
+            $('#attendanceError').removeClass('hidden').addClass('animate__animated animate__fadeIn');
+        }
+        
+        // Hide error message
+        function hideError() {
+            $('#attendanceError').addClass('hidden').removeClass('animate__animated animate__fadeIn');
         }
         
         // Show toast message
@@ -821,7 +870,7 @@ if (isset($_POST['create_attendance'])) {
             <?php endif; ?>
         });
         
-        // Initialize DataTable
+        // Initialize DataTable with error handling
         var table = $('#attendanceTable').DataTable({
             ajax: {
                 url: 'attendance_api.php?action=fetch',
@@ -831,7 +880,22 @@ if (isset($_POST['create_attendance'])) {
                         date: $('#dateFilter').val() || '<?= $preselected_date ?>'
                     };
                 },
-                dataSrc: 'data',
+                dataSrc: function(json) {
+                    if (json.error) {
+                        showError(json.error);
+                        return [];
+                    }
+                    if (!json.data) {
+                        showError('No data returned from server');
+                        return [];
+                    }
+                    hideError();
+                    return json.data;
+                },
+                error: function(xhr, error, thrown) {
+                    showError('Error loading attendance data: ' + (thrown || 'Unknown error'));
+                    hideLoading();
+                },
                 beforeSend: showLoading,
                 complete: hideLoading
             },
@@ -907,6 +971,7 @@ if (isset($_POST['create_attendance'])) {
             ],
             responsive: true,
             language: {
+                emptyTable: "No attendance records found for the selected criteria",
                 lengthMenu: "Show _MENU_ entries",
                 info: "Showing _START_ to _END_ of _TOTAL_ entries",
                 search: "Search:",
@@ -923,7 +988,7 @@ if (isset($_POST['create_attendance'])) {
         
         // Reload table when filters change
         $('#batchFilter, #dateFilter').change(function() {
-            table.ajax.reload();
+            table.ajax.reload(null, false);
         });
         
         // If batch_id was preselected, trigger the change event to load data immediately

@@ -223,6 +223,84 @@ if (isset($_GET['success'])) {
         .notification-item {
             transition: background-color 0.2s ease, transform 0.2s ease;
         }
+        
+        /* Bulb notification styles */
+        .bulb-container {
+            position: relative;
+            display: inline-block;
+        }
+        .bulb {
+            width: 24px;
+            height: 24px;
+            position: relative;
+        }
+        .bulb-light {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            background: #f8f8f8;
+            box-shadow: 
+                0 0 10px #fff,
+                0 0 20px #fff,
+                0 0 30px #fff,
+                0 0 40px #ff0,
+                0 0 70px #ff0,
+                0 0 80px #ff0,
+                0 0 100px #ff0,
+                0 0 150px #ff0;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        .bulb-light.active {
+            opacity: 1;
+            animation: bulb-flicker 2s infinite alternate;
+        }
+        @keyframes bulb-flicker {
+            0%, 19.999%, 22%, 62.999%, 64%, 64.999%, 70%, 100% {
+                opacity: 1;
+                box-shadow: 
+                    0 0 10px #fff,
+                    0 0 20px #fff,
+                    0 0 30px #fff,
+                    0 0 40px #ff0,
+                    0 0 70px #ff0,
+                    0 0 80px #ff0,
+                    0 0 100px #ff0,
+                    0 0 150px #ff0;
+            }
+            20%, 21.999%, 63%, 63.999%, 65%, 69.999% {
+                opacity: 0.8;
+                box-shadow: 
+                    0 0 5px #fff,
+                    0 0 10px #fff,
+                    0 0 15px #fff,
+                    0 0 20px #ff0,
+                    0 0 35px #ff0,
+                    0 0 40px #ff0,
+                    0 0 50px #ff0,
+                    0 0 75px #ff0;
+            }
+        }
+        .bulb-filament {
+            position: absolute;
+            width: 2px;
+            height: 8px;
+            background: #333;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+        .bulb-base {
+            position: absolute;
+            width: 8px;
+            height: 4px;
+            background: #888;
+            bottom: -4px;
+            left: 50%;
+            transform: translateX(-50%);
+            border-radius: 0 0 4px 4px;
+        }
     </style>
 </head>
 <body class="bg-gray-50 text-gray-800">
@@ -249,7 +327,14 @@ if (isset($_GET['success'])) {
         <div class="flex items-center space-x-4">
             <div class="relative">
                 <button id="notificationButton" class="p-2 rounded-full hover:bg-gray-100 relative transition-colors duration-200">
-                    <i class="fas fa-bell text-gray-600"></i>
+                    <div class="bulb-container">
+                        <div class="bulb">
+                            <div class="bulb-light <?= $unread_notifications > 0 ? 'active' : '' ?>"></div>
+                            <div class="bulb-filament"></div>
+                            <div class="bulb-base"></div>
+                        </div>
+                        <i class="fas fa-bell text-gray-600"></i>
+                    </div>
                     <?php if ($unread_notifications > 0): ?>
                         <span class="notification-badge animate-pulse"><?= $unread_notifications ?></span>
                     <?php endif; ?>
@@ -618,6 +703,12 @@ if (isset($_GET['success'])) {
             const notificationSound = document.getElementById('notificationSound');
             notificationSound.volume = 0.3; // Set volume to 30%
             notificationSound.play().catch(e => console.log('Notification sound play failed:', e));
+            
+            // Make bulb flicker more intensely when there are new notifications
+            const bulbLight = document.querySelector('.bulb-light');
+            if (bulbLight) {
+                bulbLight.style.animation = 'bulb-flicker 1s infinite alternate';
+            }
         <?php endif; ?>
     });
 
@@ -647,6 +738,12 @@ if (isset($_GET['success'])) {
             
             // Hide the red dot when dropdown is opened
             notificationDot.classList.add('hidden');
+            
+            // Turn off bulb light when notifications are viewed
+            const bulbLight = document.querySelector('.bulb-light');
+            if (bulbLight) {
+                bulbLight.classList.remove('active');
+            }
             
             // Mark notifications as seen via AJAX
             fetch('../notifications/mark_notifications_seen.php', {
