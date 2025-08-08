@@ -1,16 +1,20 @@
 <?php
-// Database connection
-$db = new PDO('mysql:host=localhost;dbname=asd_academy1', 'root', '');
-$db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+// Database connection with error handling
+require_once '../db_connection.php';
 session_start();
 if (!isset($_SESSION['user_id']) || $_SESSION['user_role'] !== 'admin') {
     header("Location: ../login.php");
     exit;
 }
+
 // Get active batches for dropdown
-$batches = $db->query("SELECT batch_id, course_name FROM batches WHERE status = 'ongoing'")->fetchAll(PDO::FETCH_ASSOC);
-// Get all exams for the table
-$exams = $db->query("SELECT * FROM proctored_exams ORDER BY exam_date DESC")->fetchAll(PDO::FETCH_ASSOC);
+try {
+    $batches = $db->query("SELECT batch_id, course_name FROM batches WHERE status = 'ongoing'")->fetchAll(PDO::FETCH_ASSOC);
+    // Get all exams for the table
+    $exams = $db->query("SELECT * FROM proctored_exams ORDER BY exam_date DESC")->fetchAll(PDO::FETCH_ASSOC);
+} catch (PDOException $e) {
+    die("Database query failed: " . $e->getMessage());
+}
 
 // Include header
 include '../header.php';
@@ -483,14 +487,24 @@ $(document).ready(function() {
             url: 'save_exam.php',
             method: 'POST',
             data: formData,
+            dataType: 'json',
             success: function(response) {
-                showSuccess('Exam created successfully!');
-                setTimeout(() => {
-                    location.reload(); // Refresh to show new exam
-                }, 1500);
+                if (response.success) {
+                    showSuccess(response.message || 'Exam created successfully!');
+                    setTimeout(() => {
+                        location.reload();
+                    }, 1500);
+                } else {
+                    showError(response.error || 'Error creating exam');
+                }
             },
             error: function(xhr) {
-                showError(xhr.responseJSON?.error || 'Error creating exam');
+                try {
+                    const error = JSON.parse(xhr.responseText);
+                    showError(error.error || 'Error creating exam');
+                } catch (e) {
+                    showError('Error creating exam');
+                }
             }
         });
     });
@@ -520,44 +534,48 @@ $(document).ready(function() {
             .addClass(malpractice > 0 ? 'bg-danger' : 'bg-success');
         
         // Fetch and display student results
-        // Change this part (around line 450):
-$.ajax({
-    url: 'get_exam_students.php',
-    method: 'GET',
-    data: { exam_id: examId },
-    success: function(students) {
-        const tableBody = $('#studentResultsTable tbody');
-        tableBody.empty();
-        
-        // Make sure students is an array
-        if (!Array.isArray(students)) {
-            showError('Invalid student data received');
-            return;
-        }
-        
-        students.forEach(student => {
-            const row = `
-                <tr ${student.is_malpractice ? 'class="malpractice-row"' : ''}>
-                    <td>${student.student_name}</td>
-                    <td>${student.score ? student.score + '%' : '-'}</td>
-                    <td>${student.is_malpractice ? '<span class="text-red-600 font-semibold">Yes</span>' : '<span class="text-green-600 font-semibold">No</span>'}</td>
-                    <td>${student.notes || '-'}</td>
-                </tr>
-            `;
-            tableBody.append(row);
+        $.ajax({
+            url: 'get_exam_students.php',
+            method: 'GET',
+            data: { exam_id: examId },
+            dataType: 'json',
+            success: function(students) {
+                const tableBody = $('#studentResultsTable tbody');
+                tableBody.empty();
+                
+                if (Array.isArray(students)) {
+                    students.forEach(student => {
+                        const row = `
+                            <tr ${student.is_malpractice ? 'class="malpractice-row"' : ''}>
+                                <td>${student.student_name}</td>
+                                <td>${student.score ? student.score + '%' : '-'}</td>
+                                <td>${student.is_malpractice ? '<span class="text-red-600 font-semibold">Yes</span>' : '<span class="text-green-600 font-semibold">No</span>'}</td>
+                                <td>${student.notes || '-'}</td>
+                            </tr>
+                        `;
+                        tableBody.append(row);
+                    });
+                } else {
+                    tableBody.append('<tr><td colspan="4" class="text-center">No student data available</td></tr>');
+                }
+                
+                $('#detailsModal').show();
+            },
+            error: function(xhr) {
+                try {
+                    const error = JSON.parse(xhr.responseText);
+                    showError(error.error || 'Error loading student results');
+                } catch (e) {
+                    showError('Error loading student results');
+                }
+            }
         });
-        
-        // Show the modal
-        $('#detailsModal').show();
-    },
-    error: function(xhr) {
-        try {
-            const error = JSON.parse(xhr.responseText);
-            showError(error.error || 'Error loading student results');
-        } catch (e) {
-            showError('Error loading student results');
-        }
-    }
+    });
+    
+    // Close modal when clicking on X
+    $('.close').click(function() {
+        $(this).closest('.modal').hide();
+    });
 });
 
 function showSuccess(message) {
@@ -571,7 +589,7 @@ function showError(message) {
 }
 
 function closeModal(id) {
-    $(`#${id}`).hide();
+    $('#' + id).hide();
 }
 
 // Close modal when clicking outside
@@ -582,5 +600,4 @@ $(window).click(function(event) {
 });
 </script>
 
-</body>
-</html>
+<?php include '../footer.php'; ?>

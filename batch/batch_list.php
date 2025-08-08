@@ -56,10 +56,10 @@ if (isset($_POST['add_batch'])) {
 }
 
 // Get filter values from GET parameters
-$course_filter = $_GET['course'] ?? '';
-$status_filter = $_GET['status'] ?? '';
-$mode_filter = $_GET['mode'] ?? '';
-$date_filter = $_GET['date_range'] ?? '';
+$course_filter = $_POST['course'] ?? '';
+$status_filter = $_POST['status'] ?? '';
+$mode_filter = $_POST['mode'] ?? '';
+$date_filter = $_POST['date_range'] ?? '';
 
 // Build the query with filters
 $query = "SELECT b.*, t.name as mentor_name 
@@ -141,7 +141,7 @@ $batches = $stmt->fetchAll(PDO::FETCH_ASSOC);
             
             <!-- Filter Card -->
             <div class="card filter-card mb-6">
-                <form method="GET" action="">
+                <form method="PUSH" action="">
                     <div class="grid grid-cols-1 md:grid-cols-5 gap-4">
                         <input type="text" name="course" id="courseFilter" placeholder="Filter by course..." 
                                class="minimal-input" value="<?= htmlspecialchars($course_filter) ?>">

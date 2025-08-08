@@ -209,10 +209,6 @@ function validateStudentData(array $data): array {
 
 $nextStudentId = generateStudentId($db);
 ?>
-<?php
-include '../header.php'; // Include your header file
-include '../sidebar.php'; // Include your sidebar file
-?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -220,143 +216,365 @@ include '../sidebar.php'; // Include your sidebar file
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Add New Student</title>
     <link rel="stylesheet" href="../assets/css/tailwind.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
+        
+        body {
+            font-family: 'Poppins', sans-serif;
+            background: linear-gradient(135deg, #f5f7fa 0%, #e4e8f0 100%);
+        }
+        
+        .form-container {
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+            transition: all 0.3s ease;
+        }
+        
+        .form-container:hover {
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+        }
+        
+        .profile-avatar {
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        
+        .profile-avatar:hover {
+            transform: scale(1.05);
+            box-shadow: 0 10px 15px rgba(0, 0, 0, 0.1);
+        }
+        
+        .input-field {
+            transition: all 0.3s ease;
+        }
+        
+        .input-field:focus {
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.3);
+        }
+        
+        .btn-primary {
+            transition: all 0.3s ease;
+            background-image: linear-gradient(to right, #3b82f6, #6366f1);
+            background-size: 200% auto;
+        }
+        
+        .btn-primary:hover {
+            background-position: right center;
+            transform: translateY(-2px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        }
+        
+        .btn-secondary {
+            transition: all 0.3s ease;
+        }
+        
+        .btn-secondary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        }
+        
+        .floating-label {
+            position: absolute;
+            top: 0;
+            left: 0;
+            pointer-events: none;
+            transition: all 0.2s ease;
+            transform-origin: left top;
+            color: #6b7280;
+        }
+        
+        .input-container {
+            position: relative;
+            padding-top: 1.5rem;
+        }
+        
+        .input-container input:focus + .floating-label,
+        .input-container input:not(:placeholder-shown) + .floating-label {
+            transform: translateY(-0.5rem) scale(0.85);
+            color: #3b82f6;
+        }
+        
+        .section-title {
+            position: relative;
+            padding-bottom: 0.5rem;
+        }
+        
+        .section-title:after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 50px;
+            height: 3px;
+            background: linear-gradient(to right, #3b82f6, #6366f1);
+            border-radius: 3px;
+        }
+        
+        .success-message {
+            animation: fadeInUp 0.5s ease;
+        }
+        
+        .error-message {
+            animation: shake 0.5s ease;
+        }
+        
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+        
+        .pulse-animation {
+            animation: pulse 2s infinite;
+        }
+    </style>
 </head>
 <body class="bg-gray-100">
-    <div class="container mx-auto p-6 max-w-4xl">
-        <div class="bg-white rounded-lg shadow-md p-6">
-            <h2 class="text-2xl font-bold text-gray-800 mb-6">Add New Student</h2>
-            
-            <?php if (!empty($errors)): ?>
-                <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-6" role="alert">
-                    <ul>
-                        <?php foreach ($errors as $error): ?>
-                            <li><?= htmlspecialchars($error) ?></li>
-                        <?php endforeach; ?>
-                    </ul>
+    <?php include '../header.php'; ?>
+    <?php include '../sidebar.php'; ?>
+    
+    <div class="ml-64 p-6">
+        <div class="container mx-auto max-w-5xl animate__animated animate__fadeIn">
+            <div class="bg-white rounded-xl form-container overflow-hidden p-8">
+                <!-- Header with gradient background -->
+                <div class="bg-gradient-to-r from-blue-500 to-indigo-600 text-white p-6 rounded-t-xl -mx-8 -mt-8 mb-8">
+                    <div class="flex justify-between items-center">
+                        <div>
+                            <h2 class="text-2xl font-bold">Add New Student</h2>
+                            <p class="text-blue-100">Fill in the student details below</p>
+                        </div>
+                        <div class="flex space-x-3">
+                            <a href="upload_student.php" class="bg-white text-blue-600 hover:bg-blue-50 px-4 py-2 rounded-lg flex items-center transition-all duration-300 transform hover:scale-105">
+                                <i class="fas fa-file-import mr-2"></i> Upload Excel
+                            </a>
+                        </div>
+                    </div>
                 </div>
-            <?php endif; ?>
-            
-            <form id="studentForm" method="post" enctype="multipart/form-data" class="space-y-6">
-                <input type="hidden" name="add_student" value="1">
                 
-                <!-- Profile Picture Section -->
-                <div class="flex items-center space-x-4">
-                    <div class="relative">
-                        <div class="w-24 h-24 rounded-full bg-blue-100 flex items-center justify-center">
-                            <i class="fas fa-user text-4xl text-blue-500"></i>
+                <?php if (!empty($errors)): ?>
+                    <div class="bg-red-50 border-l-4 border-red-500 text-red-700 p-4 mb-6 rounded error-message" role="alert">
+                        <div class="flex items-center">
+                            <div class="flex-shrink-0">
+                                <i class="fas fa-exclamation-circle text-red-500 text-xl"></i>
+                            </div>
+                            <div class="ml-3">
+                                <h3 class="text-sm font-medium">There were errors with your submission</h3>
+                                <ul class="mt-2 text-sm list-disc list-inside">
+                                    <?php foreach ($errors as $error): ?>
+                                        <li><?= htmlspecialchars($error) ?></li>
+                                    <?php endforeach; ?>
+                                </ul>
+                            </div>
                         </div>
-                        <label for="profile_picture" class="absolute bottom-0 right-0 bg-blue-500 text-white rounded-full p-2 cursor-pointer hover:bg-blue-600">
-                            <i class="fas fa-camera"></i>
-                        </label>
-                        <input type="file" id="profile_picture" name="profile_picture" class="hidden" accept="image/*">
                     </div>
-                    <div>
-                        <p class="text-sm text-gray-500">Add profile picture</p>
-                    </div>
-                </div>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <!-- Student ID -->
-                    <div>
-                        <label for="student_id" class="block text-sm font-medium text-gray-700 mb-1">Student ID</label>
-                        <input type="text" id="student_id" name="student_id" 
-                               class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-100"
-                               value="<?= htmlspecialchars($nextStudentId) ?>" readonly>
-                    </div>
+                <?php endif; ?>
+                
+                <form id="studentForm" method="post" enctype="multipart/form-data" class="space-y-8">
+                    <input type="hidden" name="add_student" value="1">
                     
-                    <!-- First Name -->
-                    <div>
-                        <label for="first_name" class="block text-sm font-medium text-gray-700 mb-1">First Name*</label>
-                        <input type="text" id="first_name" name="first_name" 
-                               class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                               required>
-                    </div>
-                </div>
-
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <!-- Last Name -->
-                    <div>
-                        <label for="last_name" class="block text-sm font-medium text-gray-700 mb-1">Last Name*</label>
-                        <input type="text" id="last_name" name="last_name" 
-                               class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                               required>
-                    </div>
-                    
-                    <!-- Email -->
-                    <div>
-                        <label for="email" class="block text-sm font-medium text-gray-700 mb-1">Email*</label>
-                        <input type="email" id="email" name="email" 
-                               class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                               required>
-                    </div>
-                </div>
-
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <!-- Password -->
-                    <div>
-                        <label for="password" class="block text-sm font-medium text-gray-700 mb-1">Password*</label>
-                        <input type="password" id="password" name="password" 
-                               class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                               required>
-                    </div>
-                    
-                    <!-- Phone Number -->
-                    <div>
-                        <label for="phone_number" class="block text-sm font-medium text-gray-700 mb-1">Phone Number</label>
-                        <input type="tel" id="phone_number" name="phone_number" 
-                               class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
-                    </div>
-                </div>
-
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <!-- Date of Birth -->
-                    <div>
-                        <label for="date_of_birth" class="block text-sm font-medium text-gray-700 mb-1">Date of Birth</label>
-                        <input type="date" id="date_of_birth" name="date_of_birth" 
-                               class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
-                    </div>
-                </div>
-
-                <div class="border-t border-gray-200 pt-6">
-                    <h3 class="text-lg font-medium text-gray-900 mb-4">Parent/Guardian Information</h3>
-                    
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <!-- Father's Name -->
+                    <!-- Profile Picture Section -->
+                    <div class="flex items-center space-x-6">
+                        <div class="relative group">
+                            <div class="w-32 h-32 rounded-full bg-gradient-to-br from-blue-100 to-indigo-100 flex items-center justify-center overflow-hidden profile-avatar">
+                                <img id="profilePreview" class="hidden w-full h-full object-cover" src="" alt="Profile Preview">
+                                <i class="fas fa-user-graduate text-5xl text-blue-500" id="defaultAvatar"></i>
+                            </div>
+                            <label for="profile_picture" class="absolute bottom-0 right-0 bg-blue-600 text-white rounded-full p-3 cursor-pointer hover:bg-blue-700 transition-all duration-300 transform hover:scale-110 shadow-lg group-hover:shadow-xl">
+                                <i class="fas fa-camera"></i>
+                                <input type="file" id="profile_picture" name="profile_picture" class="hidden" accept="image/*" onchange="previewImage(this)">
+                            </label>
+                        </div>
                         <div>
-                            <label for="father_name" class="block text-sm font-medium text-gray-700 mb-1">Father's Name</label>
-                            <input type="text" id="father_name" name="father_name" 
-                                   class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <h3 class="text-lg font-medium text-gray-800">Profile Photo</h3>
+                            <p class="text-sm text-gray-500 mt-1">Upload a clear photo of the student (JPEG, PNG)</p>
+                            <p class="text-xs text-gray-400 mt-2">Max. file size: 5MB</p>
                         </div>
+                    </div>
+                    
+                    <!-- Student Information Section -->
+                    <div class="space-y-6">
+                        <h3 class="text-xl font-semibold text-gray-800 section-title">Student Information</h3>
                         
-                        <!-- Father's Phone -->
-                        <div>
-                            <label for="father_phone_number" class="block text-sm font-medium text-gray-700 mb-1">Father's Phone</label>
-                            <input type="tel" id="father_phone_number" name="father_phone_number" 
-                                   class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <!-- Student ID -->
+                            <div class="input-container">
+                                <input type="text" id="student_id" name="student_id" 
+                                       class="w-full px-4 py-3 border border-gray-300 rounded-lg input-field bg-gray-50"
+                                       value="<?= htmlspecialchars($nextStudentId) ?>" readonly
+                                       placeholder=" ">
+                                <label for="student_id" class="floating-label">Student ID</label>
+                            </div>
+                            
+                            <!-- First Name -->
+                            <div class="input-container">
+                                <input type="text" id="first_name" name="first_name" 
+                                       class="w-full px-4 py-3 border border-gray-300 rounded-lg input-field"
+                                       required placeholder=" ">
+                                <label for="first_name" class="floating-label">First Name*</label>
+                            </div>
+                            
+                            <!-- Last Name -->
+                            <div class="input-container">
+                                <input type="text" id="last_name" name="last_name" 
+                                       class="w-full px-4 py-3 border border-gray-300 rounded-lg input-field"
+                                       required placeholder=" ">
+                                <label for="last_name" class="floating-label">Last Name*</label>
+                            </div>
+                            
+                            <!-- Email -->
+                            <div class="input-container">
+                                <input type="email" id="email" name="email" 
+                                       class="w-full px-4 py-3 border border-gray-300 rounded-lg input-field"
+                                       required placeholder=" ">
+                                <label for="email" class="floating-label">Email*</label>
+                            </div>
+                            
+                            <!-- Password -->
+                            <div class="input-container">
+                                <input type="password" id="password" name="password" 
+                                       class="w-full px-4 py-3 border border-gray-300 rounded-lg input-field"
+                                       required placeholder=" ">
+                                <label for="password" class="floating-label">Password*</label>
+                                <div class="absolute right-3 top-1/2 transform -translate-y-1/2">
+                                    <i class="far fa-eye-slash text-gray-400 cursor-pointer" id="togglePassword"></i>
+                                </div>
+                            </div>
+                            
+                            <!-- Phone Number -->
+                            <div class="input-container">
+                                <input type="tel" id="phone_number" name="phone_number" 
+                                       class="w-full px-4 py-3 border border-gray-300 rounded-lg input-field"
+                                       placeholder=" ">
+                                <label for="phone_number" class="floating-label">Phone Number</label>
+                            </div>
+                            
+                            <!-- Date of Birth -->
+                            <div class="input-container">
+                                <input type="date" id="date_of_birth" name="date_of_birth" 
+                                       class="w-full px-4 py-3 border border-gray-300 rounded-lg input-field"
+                                       placeholder=" ">
+                                <label for="date_of_birth" class="floating-label">Date of Birth</label>
+                            </div>
                         </div>
                     </div>
                     
-                    <div class="mt-6">
-                        <!-- Father's Email -->
-                        <div>
-                            <label for="father_email" class="block text-sm font-medium text-gray-700 mb-1">Father's Email</label>
-                            <input type="email" id="father_email" name="father_email" 
-                                   class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <!-- Parent/Guardian Information Section -->
+                    <div class="space-y-6 pt-6">
+                        <h3 class="text-xl font-semibold text-gray-800 section-title">Parent/Guardian Information</h3>
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <!-- Father's Name -->
+                            <div class="input-container">
+                                <input type="text" id="father_name" name="father_name" 
+                                       class="w-full px-4 py-3 border border-gray-300 rounded-lg input-field"
+                                       placeholder=" ">
+                                <label for="father_name" class="floating-label">Father's Name</label>
+                            </div>
+                            
+                            <!-- Father's Phone -->
+                            <div class="input-container">
+                                <input type="tel" id="father_phone_number" name="father_phone_number" 
+                                       class="w-full px-4 py-3 border border-gray-300 rounded-lg input-field"
+                                       placeholder=" ">
+                                <label for="father_phone_number" class="floating-label">Father's Phone</label>
+                            </div>
+                            
+                            <!-- Father's Email -->
+                            <div class="input-container md:col-span-2">
+                                <input type="email" id="father_email" name="father_email" 
+                                       class="w-full px-4 py-3 border border-gray-300 rounded-lg input-field"
+                                       placeholder=" ">
+                                <label for="father_email" class="floating-label">Father's Email</label>
+                            </div>
                         </div>
                     </div>
+                    
+                    <!-- Form Actions -->
+                    <div class="flex justify-end space-x-4 pt-8 border-t border-gray-200">
+                        <a href="students.php" class="px-6 py-3 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 btn-secondary">
+                            <i class="fas fa-times mr-2"></i> Cancel
+                        </a>
+                        <button type="submit" 
+                                class="px-6 py-3 rounded-lg text-sm font-medium text-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 btn-primary pulse-animation">
+                            <i class="fas fa-user-plus mr-2"></i> Create Student
+                        </button>
+                    </div>
+                </form>
+            </div>
+            
+            <!-- Floating notification for success -->
+            <div id="successNotification" class="fixed bottom-4 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg hidden transform transition-all duration-300 translate-y-4 opacity-0">
+                <div class="flex items-center">
+                    <i class="fas fa-check-circle mr-2"></i>
+                    <span>Student created successfully!</span>
                 </div>
-
-                <!-- Form Actions -->
-                <div class="flex justify-end space-x-4 pt-4">
-                    <a href="students.php" class="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
-                        Cancel
-                    </a>
-                    <button type="submit" 
-                            class="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
-                        Create Student
-                    </button>
-                </div>
-            </form>
+            </div>
         </div>
     </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+    <script>
+        // Profile picture preview
+        function previewImage(input) {
+            if (input.files && input.files[0]) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    $('#profilePreview').attr('src', e.target.result).removeClass('hidden');
+                    $('#defaultAvatar').addClass('hidden');
+                }
+                reader.readAsDataURL(input.files[0]);
+            }
+        }
+        
+        // Toggle password visibility
+        $('#togglePassword').click(function() {
+            const passwordField = $('#password');
+            const type = passwordField.attr('type') === 'password' ? 'text' : 'password';
+            passwordField.attr('type', type);
+            $(this).toggleClass('fa-eye-slash fa-eye');
+        });
+        
+        // Form submission animation
+        $('#studentForm').submit(function(e) {
+            const form = $(this);
+            if (form[0].checkValidity()) {
+                $('button[type="submit"]').html('<i class="fas fa-spinner fa-spin mr-2"></i> Processing...').prop('disabled', true);
+                
+                // Simulate success notification (in a real app, this would be after AJAX success)
+                setTimeout(() => {
+                    $('#successNotification').removeClass('hidden').removeClass('translate-y-4').removeClass('opacity-0').addClass('translate-y-0').addClass('opacity-100');
+                    
+                    setTimeout(() => {
+                        $('#successNotification').addClass('translate-y-4').addClass('opacity-0');
+                    }, 3000);
+                }, 1500);
+            }
+        });
+        
+        // Floating label functionality
+        $('.input-container input').each(function() {
+            if ($(this).val() !== '') {
+                $(this).next('.floating-label').addClass('transformed');
+            }
+        });
+        
+        $('.input-container input').on('input change', function() {
+            if ($(this).val() !== '') {
+                $(this).next('.floating-label').addClass('transformed');
+            } else {
+                $(this).next('.floating-label').removeClass('transformed');
+            }
+        });
+        
+        // Animate form elements on load
+        $(document).ready(function() {
+            $('.input-container').each(function(index) {
+                $(this).delay(100 * index).queue(function() {
+                    $(this).addClass('animate__animated animate__fadeInUp').dequeue();
+                });
+            });
+        });
+    </script>
 </body>
 </html>

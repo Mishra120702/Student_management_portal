@@ -31,7 +31,29 @@ if (!$workshop) {
 $trainers = $db->query("SELECT id, name FROM trainers")->fetchAll(PDO::FETCH_ASSOC);
 
 // Handle form submission
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_workshop'])) {
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    // Handle file upload
+    $cover_image = $workshop['cover_image']; // Keep existing if no new upload
+    
+    if (isset($_FILES['cover_image_file']) && $_FILES['cover_image_file']['error'] === UPLOAD_ERR_OK) {
+        $uploadDir = '../uploads/workshops/';
+        if (!file_exists($uploadDir)) {
+            mkdir($uploadDir, 0777, true);
+        }
+        
+        $fileExt = pathinfo($_FILES['cover_image_file']['name'], PATHINFO_EXTENSION);
+        $fileName = 'workshop_' . $workshop_id . '_' . time() . '.' . $fileExt;
+        $filePath = $uploadDir . $fileName;
+        
+        if (move_uploaded_file($_FILES['cover_image_file']['tmp_name'], $filePath)) {
+            $cover_image = $filePath;
+            // Delete old image if it exists and is not the default
+            if ($workshop['cover_image'] && !str_contains($workshop['cover_image'], 'default-workshop.jpg')) {
+                @unlink($workshop['cover_image']);
+            }
+        }
+    }
+    
     $stmt = $db->prepare("UPDATE workshops SET
         title = ?,
         description = ?,
@@ -59,11 +81,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_workshop'])) {
         $_POST['trainer_id'] ?: null,
         $_POST['fee'],
         $_POST['status'],
-        $_POST['cover_image'],
+        $cover_image,
         $_POST['requirements'],
         isset($_POST['certificate_available']) ? 1 : 0,
         $workshop_id
     ]);
+    
+    // Handle material upload
+    if (isset($_FILES['material_file']) && $_FILES['material_file']['error'] === UPLOAD_ERR_OK) {
+        $uploadDir = '../uploads/workshop_materials/';
+        if (!file_exists($uploadDir)) {
+            mkdir($uploadDir, 0777, true);
+        }
+        
+        $fileExt = pathinfo($_FILES['material_file']['name'], PATHINFO_EXTENSION);
+        $fileName = 'material_' . $workshop_id . '_' . time() . '.' . $fileExt;
+        $filePath = $uploadDir . $fileName;
+        
+        if (move_uploaded_file($_FILES['material_file']['tmp_name'], $filePath)) {
+            $stmt = $db->prepare("INSERT INTO workshop_materials 
+                                 (workshop_id, title, description, file_path, file_type, uploaded_by, is_public)
+                                 VALUES (?, ?, ?, ?, ?, ?, ?)");
+            $stmt->execute([
+                $workshop_id,
+                $_POST['material_title'],
+                $_POST['material_description'],
+                $filePath,
+                $_POST['material_file_type'],
+                $_SESSION['user_id'],
+                $_POST['material_is_public']
+            ]);
+        }
+    }
     
     // Refresh the page to show updated data
     header("Location: edit_workshop.php?id=$workshop_id&success=1");
@@ -384,6 +433,105 @@ $materials = $materials->fetchAll(PDO::FETCH_ASSOC);
             margin-right: 0.5rem;
         }
         
+        /* Modal styles */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.5);
+            backdrop-filter: blur(5px);
+        }
+        
+        .modal-content {
+            background-color: #fefefe;
+            margin: 5% auto;
+            padding: 2rem;
+            border-radius: 0.5rem;
+            width: 90%;
+            max-width: 600px;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+            animation: fadeInDown 0.4s;
+        }
+        
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        
+        .close-modal {
+            color: #718096;
+            font-size: 1.5rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        
+        .close-modal:hover {
+            color: #4a5568;
+            transform: rotate(90deg);
+        }
+        
+        .modal-footer {
+            display: flex;
+            justify-content: flex-end;
+            margin-top: 1.5rem;
+            padding-top: 1rem;
+            border-top: 1px solid #e2e8f0;
+        }
+        
+        .thumbnail-preview {
+            width: 100%;
+            max-height: 200px;
+            object-fit: contain;
+            margin-bottom: 1rem;
+            border-radius: 0.5rem;
+            border: 1px dashed #e2e8f0;
+            padding: 0.5rem;
+        }
+        
+        .file-input-container {
+            position: relative;
+            overflow: hidden;
+            display: inline-block;
+            width: 100%;
+        }
+        
+        .file-input-button {
+            border: 1px solid #e2e8f0;
+            border-radius: 0.375rem;
+            padding: 0.5rem 1rem;
+            background-color: #f8fafc;
+            color: #4a5568;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+        }
+        
+        .file-input-button:hover {
+            background-color: #e2e8f0;
+        }
+        
+        .file-input {
+            position: absolute;
+            left: 0;
+            top: 0;
+            opacity: 0;
+            width: 100%;
+            height: 100%;
+            cursor: pointer;
+        }
+        
         @keyframes fadeIn {
             from { opacity: 0; }
             to { opacity: 1; }
@@ -417,6 +565,17 @@ $materials = $materials->fetchAll(PDO::FETCH_ASSOC);
             }
             to {
                 opacity: 0;
+            }
+        }
+        
+        @keyframes fadeInDown {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
             }
         }
         
@@ -517,7 +676,7 @@ $materials = $materials->fetchAll(PDO::FETCH_ASSOC);
             
             <!-- Workshop Details Tab -->
             <div id="details-tab" class="tab-content active">
-                <form id="workshopForm" method="post" class="space-y-4">
+                <form id="workshopForm" method="post" class="space-y-4" enctype="multipart/form-data">
                     <input type="hidden" name="update_workshop" value="1">
                     
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -616,10 +775,27 @@ $materials = $materials->fetchAll(PDO::FETCH_ASSOC);
                         
                         <!-- Cover Image -->
                         <div class="form-group">
-                            <label for="cover_image" class="form-label">Cover Image URL</label>
-                            <input type="text" id="cover_image" name="cover_image" 
-                                   class="form-control"
-                                   value="<?= htmlspecialchars($workshop['cover_image']) ?>">
+                            <label for="cover_image" class="form-label">Cover Image</label>
+                            <?php if ($workshop['cover_image']): ?>
+                                <img src="<?= htmlspecialchars($workshop['cover_image']) ?>" 
+                                     class="thumbnail-preview mb-2" 
+                                     id="thumbnailPreview"
+                                     alt="Workshop thumbnail">
+                            <?php else: ?>
+                                <div class="thumbnail-preview mb-2 bg-gray-100 flex items-center justify-center" id="thumbnailPreview">
+                                    <i class="fas fa-image text-gray-400 text-4xl"></i>
+                                </div>
+                            <?php endif; ?>
+                            
+                            <div class="file-input-container">
+                                <div class="file-input-button">
+                                    <i class="fas fa-upload mr-2"></i>
+                                    <span id="fileLabel">Choose new thumbnail</span>
+                                </div>
+                                <input type="file" id="cover_image_file" name="cover_image_file" 
+                                       class="file-input" accept="image/*">
+                            </div>
+                            <small class="text-gray-500">Recommended size: 1200x630 pixels</small>
                         </div>
                     </div>
 
@@ -782,7 +958,7 @@ $materials = $materials->fetchAll(PDO::FETCH_ASSOC);
                                        title="Edit">
                                         <i class="fas fa-edit"></i>
                                     </a>
-                                    <a href="#" 
+                                    <a href="delete_material.php?id=<?= $material['id'] ?>&workshop_id=<?= $workshop_id ?>" 
                                        class="action-link delete" 
                                        title="Delete"
                                        onclick="return confirm('Delete this material?')">
@@ -799,7 +975,7 @@ $materials = $materials->fetchAll(PDO::FETCH_ASSOC);
     
     <!-- Add Material Modal -->
     <div id="addMaterialModal" class="modal">
-        <div class="modal-content" style="max-width: 600px;">
+        <div class="modal-content">
             <div class="modal-header">
                 <h3 class="text-xl font-semibold text-gray-800">Add Workshop Material</h3>
                 <span class="close-modal">&times;</span>
@@ -809,20 +985,20 @@ $materials = $materials->fetchAll(PDO::FETCH_ASSOC);
                 
                 <div class="form-group">
                     <label for="material_title" class="form-label">Title*</label>
-                    <input type="text" id="material_title" name="title" 
+                    <input type="text" id="material_title" name="material_title" 
                            class="form-control" required>
                 </div>
                 
                 <div class="form-group">
                     <label for="material_description" class="form-label">Description</label>
-                    <textarea id="material_description" name="description" rows="3"
+                    <textarea id="material_description" name="material_description" rows="3"
                               class="form-control"></textarea>
                 </div>
                 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div class="form-group">
                         <label for="material_file_type" class="form-label">File Type*</label>
-                        <select id="material_file_type" name="file_type" 
+                        <select id="material_file_type" name="material_file_type" 
                                 class="form-control" required>
                             <option value="">Select Type</option>
                             <option value="slides">Slides</option>
@@ -835,7 +1011,7 @@ $materials = $materials->fetchAll(PDO::FETCH_ASSOC);
                     
                     <div class="form-group">
                         <label for="material_is_public" class="form-label">Visibility</label>
-                        <select id="material_is_public" name="is_public" 
+                        <select id="material_is_public" name="material_is_public" 
                                 class="form-control">
                             <option value="0">Private (Only for this workshop)</option>
                             <option value="1">Public (All students can access)</option>
@@ -845,15 +1021,19 @@ $materials = $materials->fetchAll(PDO::FETCH_ASSOC);
                 
                 <div class="form-group">
                     <label for="material_file" class="form-label">File*</label>
-                    <div class="mt-1 flex items-center">
-                        <input type="file" id="material_file" name="file" 
-                               class="form-control" required>
+                    <div class="file-input-container">
+                        <div class="file-input-button">
+                            <i class="fas fa-upload mr-2"></i>
+                            <span id="materialFileLabel">Choose file</span>
+                        </div>
+                        <input type="file" id="material_file" name="material_file" 
+                               class="file-input" required>
                     </div>
+                    <small class="text-gray-500">Max file size: 20MB</small>
                 </div>
                 
                 <div class="flex justify-end space-x-4 pt-4 border-t border-gray-200">
-                    <button type="button" onclick="document.getElementById('addMaterialModal').style.display='none'" 
-                            class="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                    <button type="button" class="close-modal-btn px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
                         Cancel
                     </button>
                     <button type="submit" 
@@ -913,14 +1093,14 @@ $materials = $materials->fetchAll(PDO::FETCH_ASSOC);
                 $('#addMaterialModal').fadeIn();
             });
 
-            $('.close-modal').click(function() {
+            $('.close-modal, .close-modal-btn').click(function() {
                 $('#addMaterialModal').fadeOut();
             });
 
             // Close modal when clicking outside
             $(window).click(function(event) {
-                if ($(event.target).is('#addMaterialModal')) {
-                    $('#addMaterialModal').fadeOut();
+                if ($(event.target).is('.modal')) {
+                    $('.modal').fadeOut();
                 }
             });
 
@@ -958,32 +1138,26 @@ $materials = $materials->fetchAll(PDO::FETCH_ASSOC);
                 return true;
             });
 
-            // Registration status colors
-            $('.registration-status').each(function() {
-                const status = $(this).data('status');
-                $(this).addClass(`status-${status}`);
+            // Thumbnail preview
+            $('#cover_image_file').change(function(e) {
+                const file = e.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        $('#thumbnailPreview').attr('src', e.target.result);
+                        $('#fileLabel').text(file.name);
+                    }
+                    reader.readAsDataURL(file);
+                }
             });
 
-            // Auto-calculate registration percentage
-            function updateRegistrationPercentage() {
-                const max = parseInt($('#max_participants').val()) || 0;
-                const current = parseInt($('#current_registrations').val()) || 0;
-                const percentage = max > 0 ? Math.min(100, (current / max) * 100) : 0;
-                
-                $('.progress-fill').css('width', `${percentage}%`);
-                $('.progress-text').text(`${Math.round(percentage)}% (${current}/${max})`);
-                
-                if (percentage >= 90) {
-                    $('.progress-fill').css('background-color', '#ef4444'); // red
-                } else if (percentage >= 75) {
-                    $('.progress-fill').css('background-color', '#f59e0b'); // yellow
-                } else {
-                    $('.progress-fill').css('background-color', '#3b82f6'); // blue
+            // Material file label update
+            $('#material_file').change(function(e) {
+                const file = e.target.files[0];
+                if (file) {
+                    $('#materialFileLabel').text(file.name);
                 }
-            }
-
-            $('#max_participants, #current_registrations').on('input', updateRegistrationPercentage);
-            updateRegistrationPercentage();
+            });
 
             // Success message fade out
             setTimeout(function() {

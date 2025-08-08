@@ -170,7 +170,7 @@
             <a href="login.php" class="gradient-bg text-white px-6 py-3 rounded-lg font-medium hover:shadow-lg transition duration-300 btn-hover">
               <i class="fas fa-sign-in-alt mr-2"></i> Student Login
             </a>
-            <a href="login.php" class="bg-white text-primary-600 border border-primary-200 px-6 py-3 rounded-lg font-medium hover:bg-primary-50 transition duration-300 btn-hover">
+            <a href="log2.php" class="bg-white text-primary-600 border border-primary-200 px-6 py-3 rounded-lg font-medium hover:bg-primary-50 transition duration-300 btn-hover">
               <i class="fas fa-user-tie mr-2"></i> Faculty Login
             </a>
           </div>

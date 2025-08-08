@@ -2,12 +2,11 @@
 header('Content-Type: application/json');
 session_start();
 if (!isset($_SESSION['user_id']) || $_SESSION['user_role'] !== 'admin') {
-    header("Location: ../login.php");
+    header("Location: ../log.php");
     exit;
 }
 // Database connection
-$db = new PDO('mysql:host=localhost;dbname=asd_academy1', 'root', '');
-$db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+require_once '../db_connection.php';
 
 $action = $_GET['action'] ?? $_POST['action'] ?? '';
 
@@ -35,10 +34,15 @@ try {
             
         case 'update':
             // Update attendance status
-            $id = $_POST['id'];
-            $status = $_POST['status'];
-            $camera_status = $_POST['camera_status'] ?? 'On';
+            $id = $_POST['id'] ?? null;
+            $status = $_POST['status'] ?? null;
+            $camera_status = $_POST['camera_status'] ?? 'Off';
             $remarks = $_POST['remarks'] ?? null;
+            
+            if (!$id || !$status) {
+                echo json_encode(['success' => false, 'message' => 'Missing required fields']);
+                exit;
+            }
             
             $stmt = $db->prepare("UPDATE attendance SET status = ?, camera_status = ?, remarks = ? WHERE id = ?");
             $stmt->execute([$status, $camera_status, $remarks, $id]);
@@ -48,13 +52,18 @@ try {
             
         case 'mark_all_present':
             // Mark all students present for a batch/date
-            $batch_id = $_POST['batch_id'];
-            $date = $_POST['date'];
+            $batch_id = $_POST['batch_id'] ?? null;
+            $date = $_POST['date'] ?? null;
+            
+            if (!$batch_id || !$date) {
+                echo json_encode(['success' => false, 'message' => 'Batch ID and date are required']);
+                exit;
+            }
             
             $stmt = $db->prepare("UPDATE attendance SET status = 'Present', camera_status = 'On', remarks = NULL WHERE batch_id = ? AND date = ?");
             $stmt->execute([$batch_id, $date]);
             
-            echo json_encode(['success' => true]);
+            echo json_encode(['success' => true, 'message' => 'All students marked as present']);
             break;
             
         case 'monthly_summary':
@@ -67,8 +76,14 @@ try {
                 exit;
             }
             
+            // Validate month format
+            if (!preg_match('/^\d{4}-\d{2}$/', $month)) {
+                echo json_encode(['success' => false, 'message' => 'Invalid month format']);
+                exit;
+            }
+            
             // Get month name for display
-            $month_name = date('F Y', strtotime($month));
+            $month_name = date('F Y', strtotime($month . '-01'));
             
             // Get total distinct class dates in the month
             $stmt = $db->prepare("SELECT COUNT(DISTINCT date) as total_classes 
@@ -120,18 +135,16 @@ try {
                     // Add to response
                     $response['students'][] = [
                         'student_name' => $student,
-                        'batch_id' => $batch_id,
-                        'month' => $month,
-                        'present_count' => $attendance['present_count'],
-                        'absent_count' => $attendance['absent_count'],
-                        'late_count' => $attendance['late_count'],
+                        'present_count' => (int)$attendance['present_count'],
+                        'absent_count' => (int)$attendance['absent_count'],
+                        'late_count' => (int)$attendance['late_count'],
                         'attendance_percentage' => $attendance_percentage
                     ];
                     
                     // Update totals
-                    $response['total_present'] += $attendance['present_count'];
-                    $response['total_absent'] += $attendance['absent_count'];
-                    $response['total_late'] += $attendance['late_count'];
+                    $response['total_present'] += (int)$attendance['present_count'];
+                    $response['total_absent'] += (int)$attendance['absent_count'];
+                    $response['total_late'] += (int)$attendance['late_count'];
                 }
                 
                 // Calculate overall attendance percentage
@@ -147,6 +160,13 @@ try {
             echo json_encode(['error' => 'Invalid action']);
     }
 } catch (PDOException $e) {
-    echo json_encode(['error' => 'Database error: ' . $e->getMessage()]);
+    error_log("Database error: " . $e->getMessage());
+    echo json_encode(['error' => 'Database error occurred']);
+} catch (Exception $e) {
+    error_log("Error: " . $e->getMessage());
+    echo json_encode(['error' => 'An error occurred']);
 }
+
+// Ensure no output after JSON
+exit;
 ?>

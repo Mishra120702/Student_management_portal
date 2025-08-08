@@ -22,9 +22,11 @@ if (!isset($_GET['id']) || !is_numeric($_GET['id'])) {
 $trainerId = (int)$_GET['id'];
 $errors = [];
 $success = false;
+$passwordChangeSuccess = false;
+$profilePictureSuccess = false;
 
 // Fetch trainer data
-$stmt = $db->prepare("SELECT t.*, u.email 
+$stmt = $db->prepare("SELECT t.*, u.email, u.id as user_id 
                        FROM trainers t 
                        JOIN users u ON t.user_id = u.id 
                        WHERE t.id = ?");
@@ -37,58 +39,131 @@ if (!$trainer) {
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    // Validate and process form data
-    $name = trim($_POST['name'] ?? '');
-    $email = trim($_POST['email'] ?? '');
-    $specialization = trim($_POST['specialization'] ?? '');
-    $experience = (int)($_POST['experience'] ?? 0);
-    $bio = trim($_POST['bio'] ?? '');
-    $isActive = isset($_POST['is_active']) ? 1 : 0;
-
-    // Basic validation
-    if (empty($name)) $errors[] = 'Name is required';
-    if (empty($email) || !filter_var($email, FILTER_VALIDATE_EMAIL)) $errors[] = 'Valid email is required';
-    if ($experience < 0) $errors[] = 'Experience cannot be negative';
-
-    if (empty($errors)) {
-        // Check if email already exists for another user
-        $stmt = $db->prepare("SELECT id FROM users WHERE email = ? AND id != ?");
-        $stmt->execute([$email, $trainer['user_id']]);
+    // Check if this is a profile picture change request
+    if (isset($_POST['change_profile_picture']) && isset($_FILES['profile_picture'])) {
+        $uploadDir = '../uploads/trainer_profile_pictures/';
+        if (!file_exists($uploadDir)) {
+            mkdir($uploadDir, 0777, true);
+        }
         
-        if ($stmt->rowCount() > 0) {
-            $errors[] = 'Email already exists for another user';
+        $allowedTypes = ['image/jpeg', 'image/png', 'image/gif'];
+        $file = $_FILES['profile_picture'];
+        $fileType = mime_content_type($file['tmp_name']);
+        
+        if (!in_array($fileType, $allowedTypes)) {
+            $errors[] = 'Only JPG, PNG, and GIF files are allowed.';
+        } elseif ($file['size'] > 2097152) { // 2MB
+            $errors[] = 'File size must be less than 2MB.';
         } else {
-            // Update records in a transaction
-            $db->beginTransaction();
+            $extension = pathinfo($file['name'], PATHINFO_EXTENSION);
+            $filename = 'trainer_' . $trainerId . '_' . time() . '.' . $extension;
+            $destination = $uploadDir . $filename;
             
-            try {
-                // Update user email
-                $stmt = $db->prepare("UPDATE users SET email = ? WHERE id = ?");
-                $stmt->execute([$email, $trainer['user_id']]);
+            if (move_uploaded_file($file['tmp_name'], $destination)) {
+                // Delete old profile picture if it exists
+                if (!empty($trainer['profile_picture']) && file_exists($trainer['profile_picture'])) {
+                    unlink($trainer['profile_picture']);
+                }
                 
-                // Update trainer
-                $stmt = $db->prepare("UPDATE trainers 
-                                      SET name = ?, specialization = ?, years_of_experience = ?, 
-                                          bio = ?, is_active = ?, updated_at = NOW() 
-                                      WHERE id = ?");
-                $stmt->execute([$name, $specialization, $experience, $bio, $isActive, $trainerId]);
+                // Update database
+                $stmt = $db->prepare("UPDATE trainers SET profile_picture = ? WHERE id = ?");
+                if ($stmt->execute([$destination, $trainerId])) {
+                    $profilePictureSuccess = true;
+                    $_SESSION['success_message'] = 'Profile picture updated successfully';
+                    // Refresh trainer data
+                    $stmt = $db->prepare("SELECT t.*, u.email, u.id as user_id 
+                                          FROM trainers t 
+                                          JOIN users u ON t.user_id = u.id 
+                                          WHERE t.id = ?");
+                    $stmt->execute([$trainerId]);
+                    $trainer = $stmt->fetch(PDO::FETCH_ASSOC);
+                } else {
+                    $errors[] = 'Failed to update profile picture in database';
+                }
+            } else {
+                $errors[] = 'Failed to upload file';
+            }
+        }
+    }
+    // Check if this is a password change request
+    elseif (isset($_POST['change_password'])) {
+        $newPassword = trim($_POST['new_password'] ?? '');
+        $confirmPassword = trim($_POST['confirm_password'] ?? '');
+        
+        // Validate password
+        if (empty($newPassword)) {
+            $errors[] = 'New password is required';
+        } elseif (strlen($newPassword) < 8) {
+            $errors[] = 'Password must be at least 8 characters long';
+        } elseif ($newPassword !== $confirmPassword) {
+            $errors[] = 'Passwords do not match';
+        }
+        
+        if (empty($errors)) {
+            // Update password
+            $passwordHash = password_hash($newPassword, PASSWORD_DEFAULT);
+            $stmt = $db->prepare("UPDATE users SET password_hash = ? WHERE id = ?");
+            if ($stmt->execute([$passwordHash, $trainer['user_id']])) {
+                $passwordChangeSuccess = true;
+                $_SESSION['success_message'] = 'Password changed successfully';
+            } else {
+                $errors[] = 'Failed to update password';
+            }
+        }
+    } else {
+        // Original form processing for trainer data
+        $name = trim($_POST['name'] ?? '');
+        $email = trim($_POST['email'] ?? '');
+        $specialization = trim($_POST['specialization'] ?? '');
+        $experience = (int)($_POST['experience'] ?? 0);
+        $bio = trim($_POST['bio'] ?? '');
+        $isActive = isset($_POST['is_active']) ? 1 : 0;
+
+        // Basic validation
+        if (empty($name)) $errors[] = 'Name is required';
+        if (empty($email) || !filter_var($email, FILTER_VALIDATE_EMAIL)) $errors[] = 'Valid email is required';
+        if ($experience < 0) $errors[] = 'Experience cannot be negative';
+
+        if (empty($errors)) {
+            // Check if email already exists for another user
+            $stmt = $db->prepare("SELECT id FROM users WHERE email = ? AND id != ?");
+            $stmt->execute([$email, $trainer['user_id']]);
+            
+            if ($stmt->rowCount() > 0) {
+                $errors[] = 'Email already exists for another user';
+            } else {
+                // Update records in a transaction
+                $db->beginTransaction();
                 
-                $db->commit();
-                $success = true;
-                
-                // Refresh trainer data
-                $stmt = $db->prepare("SELECT t.*, u.email 
-                                      FROM trainers t 
-                                      JOIN users u ON t.user_id = u.id 
-                                      WHERE t.id = ?");
-                $stmt->execute([$trainerId]);
-                $trainer = $stmt->fetch(PDO::FETCH_ASSOC);
-                
-                // Show success message
-                $_SESSION['success_message'] = 'Trainer updated successfully';
-            } catch (Exception $e) {
-                $db->rollBack();
-                $errors[] = 'Failed to update trainer: ' . $e->getMessage();
+                try {
+                    // Update user email
+                    $stmt = $db->prepare("UPDATE users SET email = ? WHERE id = ?");
+                    $stmt->execute([$email, $trainer['user_id']]);
+                    
+                    // Update trainer
+                    $stmt = $db->prepare("UPDATE trainers 
+                                          SET name = ?, specialization = ?, years_of_experience = ?, 
+                                              bio = ?, is_active = ?, updated_at = NOW() 
+                                          WHERE id = ?");
+                    $stmt->execute([$name, $specialization, $experience, $bio, $isActive, $trainerId]);
+                    
+                    $db->commit();
+                    $success = true;
+                    
+                    // Refresh trainer data
+                    $stmt = $db->prepare("SELECT t.*, u.email 
+                                          FROM trainers t 
+                                          JOIN users u ON t.user_id = u.id 
+                                          WHERE t.id = ?");
+                    $stmt->execute([$trainerId]);
+                    $trainer = $stmt->fetch(PDO::FETCH_ASSOC);
+                    
+                    // Show success message
+                    $_SESSION['success_message'] = 'Trainer updated successfully';
+                } catch (Exception $e) {
+                    $db->rollBack();
+                    $errors[] = 'Failed to update trainer: ' . $e->getMessage();
+                }
             }
         }
     }
@@ -231,6 +306,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             transform: translateY(-1px);
             box-shadow: 0 1px 3px rgba(0,0,0,0.1);
             color: var(--dark);
+        }
+        
+        .btn-danger {
+            background-color: var(--danger);
+            color: white;
+            border: 1px solid var(--danger);
+        }
+        
+        .btn-danger:hover {
+            background-color: #dc2626;
+            transform: translateY(-1px);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            color: white;
         }
         
         .page-title {
@@ -388,6 +476,168 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 box-shadow: 0 0 0 0 rgba(59, 130, 246, 0);
             }
         }
+        
+        /* Password strength meter */
+        .password-strength {
+            height: 5px;
+            margin-top: 5px;
+            border-radius: 2.5px;
+            transition: all 0.3s;
+        }
+        
+        .strength-0 {
+            width: 0%;
+            background-color: #ef4444;
+        }
+        
+        .strength-1 {
+            width: 25%;
+            background-color: #ef4444;
+        }
+        
+        .strength-2 {
+            width: 50%;
+            background-color: #f59e0b;
+        }
+        
+        .strength-3 {
+            width: 75%;
+            background-color: #3b82f6;
+        }
+        
+        .strength-4 {
+            width: 100%;
+            background-color: #10b981;
+        }
+        
+        /* Modal styles */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .modal-content {
+            background-color: white;
+            border-radius: 0.5rem;
+            width: 90%;
+            max-width: 500px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            animation: modalFadeIn 0.3s ease;
+        }
+        
+        @keyframes modalFadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .modal-header {
+            padding: 1rem 1.5rem;
+            border-bottom: 1px solid #e5e7eb;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .modal-body {
+            padding: 1.5rem;
+        }
+        
+        .modal-footer {
+            padding: 1rem 1.5rem;
+            border-top: 1px solid #e5e7eb;
+            display: flex;
+            justify-content: flex-end;
+            gap: 0.75rem;
+        }
+        
+        .close-modal {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: #6b7280;
+        }
+        
+        .close-modal:hover {
+            color: #1f2937;
+        }
+        
+        /* Profile picture modal styles */
+        #profileModal .modal-content {
+            max-width: 400px;
+        }
+        
+        .preview-container {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 1.5rem;
+        }
+        
+        .preview-image {
+            max-width: 200px;
+            max-height: 200px;
+            border-radius: 0.5rem;
+            object-fit: cover;
+            border: 3px solid #e5e7eb;
+        }
+        
+        .file-input-wrapper {
+            position: relative;
+            overflow: hidden;
+            display: inline-block;
+            width: 100%;
+        }
+        
+        .file-input-button {
+            border: 1px dashed #d1d5db;
+            border-radius: 0.375rem;
+            padding: 1.5rem;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            width: 100%;
+        }
+        
+        .file-input-button:hover {
+            border-color: var(--primary);
+            background-color: #f8fafc;
+        }
+        
+        .file-input-button i {
+            font-size: 2rem;
+            color: var(--primary);
+            margin-bottom: 0.5rem;
+        }
+        
+        .file-input-button span {
+            display: block;
+            font-size: 0.875rem;
+            color: #6b7280;
+        }
+        
+        .file-input {
+            position: absolute;
+            left: 0;
+            top: 0;
+            opacity: 0;
+            width: 100%;
+            height: 100%;
+            cursor: pointer;
+        }
     </style>
 </head>
 <body class="bg-gray-50 text-gray-800">
@@ -496,6 +746,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 </div>
                                 
                                 <div class="flex justify-end mt-6 space-x-3">
+                                    <button type="button" onclick="openPasswordModal()" class="btn btn-danger">
+                                        <i class="fas fa-key mr-2"></i> Change Password
+                                    </button>
                                     <a href="view.php?id=<?= $trainerId ?>" class="btn btn-outline-secondary">
                                         <i class="fas fa-eye mr-2"></i> View Profile
                                     </a>
@@ -517,16 +770,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             </h2>
                         </div>
                         <div class="card-body flex flex-col items-center">
-                            <img src="<?= getTrainerPhoto($trainer) ?>" 
+                            <img src="<?= !empty($trainer['profile_picture']) ? $trainer['profile_picture'] : '../assets/images/default-avatar.svg' ?>" 
                                  class="trainer-avatar animate-bounce" 
                                  alt="<?= htmlspecialchars($trainer['name']) ?>"
-                                 onerror="this.src='../assets/images/default-avatar.svg'">
-                            <button class="btn btn-outline-secondary mt-2">
+                                 id="profileImagePreview">
+                            <button type="button" onclick="openProfileModal()" class="btn btn-primary mt-2">
                                 <i class="fas fa-camera mr-2"></i> Change Photo
                             </button>
                             <p class="text-sm text-gray-500 mt-3 text-center">
                                 Recommended size: 500x500px<br>
-                                Max file size: 2MB
+                                Max file size: 2MB (JPG, PNG)
                             </p>
                         </div>
                     </div>
@@ -573,6 +826,86 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         </div>
                     </div>
                 </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Password Change Modal -->
+    <div id="passwordModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="text-lg font-semibold text-gray-800">
+                    <i class="fas fa-key mr-2 text-blue-500"></i>
+                    Change Password
+                </h3>
+                <button class="close-modal" onclick="closePasswordModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="passwordForm" method="POST">
+                    <input type="hidden" name="change_password" value="1">
+                    
+                    <div class="mb-4">
+                        <label for="new_password" class="form-label">New Password</label>
+                        <input type="password" class="form-control" id="new_password" name="new_password" required>
+                        <div class="password-strength strength-0" id="passwordStrength"></div>
+                        <small class="text-gray-500">Must be at least 8 characters long</small>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <label for="confirm_password" class="form-label">Confirm Password</label>
+                        <input type="password" class="form-control" id="confirm_password" name="confirm_password" required>
+                        <small id="passwordMatch" class="text-gray-500"></small>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" onclick="closePasswordModal()">
+                    Cancel
+                </button>
+                <button type="button" class="btn btn-primary" onclick="submitPasswordForm()">
+                    <i class="fas fa-save mr-2"></i> Update Password
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Profile Picture Change Modal -->
+    <div id="profileModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="text-lg font-semibold text-gray-800">
+                    <i class="fas fa-camera mr-2 text-blue-500"></i>
+                    Change Profile Picture
+                </h3>
+                <button class="close-modal" onclick="closeProfileModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="profileForm" method="POST" enctype="multipart/form-data">
+                    <input type="hidden" name="change_profile_picture" value="1">
+                    
+                    <div class="preview-container">
+                        <img id="imagePreview" src="<?= !empty($trainer['profile_picture']) ? $trainer['profile_picture'] : '../assets/images/default-avatar.svg' ?>" 
+                             class="preview-image" alt="Profile Preview">
+                    </div>
+                    
+                    <div class="file-input-wrapper">
+                        <label class="file-input-button">
+                            <i class="fas fa-cloud-upload-alt"></i>
+                            <span>Click to upload or drag and drop</span>
+                            <span class="text-xs text-gray-400">JPG, PNG (Max 2MB)</span>
+                            <input type="file" class="file-input" id="profile_picture" name="profile_picture" 
+                                   accept="image/jpeg,image/png" onchange="previewImage(this)">
+                        </label>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" onclick="closeProfileModal()">
+                    Cancel
+                </button>
+                <button type="button" class="btn btn-primary" onclick="submitProfileForm()">
+                    <i class="fas fa-save mr-2"></i> Update Photo
+                </button>
             </div>
         </div>
     </div>
@@ -628,11 +961,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         });
         
+        // Password strength checker
+        $('#new_password').on('keyup', function() {
+            const password = $(this).val();
+            const strength = checkPasswordStrength(password);
+            $('#passwordStrength').removeClass().addClass('password-strength strength-' + strength);
+        });
+        
+        // Password match checker
+        $('#confirm_password').on('keyup', function() {
+            const password = $('#new_password').val();
+            const confirmPassword = $(this).val();
+            
+            if (confirmPassword.length === 0) {
+                $('#passwordMatch').text('').removeClass('text-green-600 text-red-600');
+            } else if (password === confirmPassword) {
+                $('#passwordMatch').text('Passwords match').removeClass('text-red-600').addClass('text-green-600');
+            } else {
+                $('#passwordMatch').text('Passwords do not match').removeClass('text-green-600').addClass('text-red-600');
+            }
+        });
+        
         // Success message animation
-        <?php if ($success): ?>
+        <?php if ($success || $passwordChangeSuccess || $profilePictureSuccess): ?>
             Swal.fire({
                 title: 'Success!',
-                text: 'Trainer updated successfully',
+                text: '<?= 
+                    $profilePictureSuccess ? "Profile picture updated successfully" : 
+                    ($passwordChangeSuccess ? "Password changed successfully" : "Trainer updated successfully") 
+                ?>',
                 icon: 'success',
                 showConfirmButton: false,
                 timer: 2000,
@@ -644,6 +1001,104 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             });
         <?php endif; ?>
     });
+    
+    // Password strength checker function
+    function checkPasswordStrength(password) {
+        let strength = 0;
+        
+        // Length check
+        if (password.length >= 8) strength++;
+        
+        // Contains lowercase
+        if (/[a-z]/.test(password)) strength++;
+        
+        // Contains uppercase
+        if (/[A-Z]/.test(password)) strength++;
+        
+        // Contains number or special char
+        if (/[0-9!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password)) strength++;
+        
+        return strength;
+    }
+    
+    // Modal functions
+    function openPasswordModal() {
+        $('#passwordModal').css('display', 'flex');
+        $('#new_password').focus();
+    }
+    
+    function closePasswordModal() {
+        $('#passwordModal').hide();
+        $('#passwordForm')[0].reset();
+        $('#passwordStrength').removeClass().addClass('password-strength strength-0');
+        $('#passwordMatch').text('').removeClass('text-green-600 text-red-600');
+    }
+    
+    function submitPasswordForm() {
+        const newPassword = $('#new_password').val();
+        const confirmPassword = $('#confirm_password').val();
+        
+        if (!newPassword || newPassword.length < 8) {
+            Swal.fire({
+                title: 'Error',
+                text: 'Password must be at least 8 characters long',
+                icon: 'error',
+                confirmButtonText: 'OK'
+            });
+            return;
+        }
+        
+        if (newPassword !== confirmPassword) {
+            Swal.fire({
+                title: 'Error',
+                text: 'Passwords do not match',
+                icon: 'error',
+                confirmButtonText: 'OK'
+            });
+            return;
+        }
+        
+        $('.loading-spinner').addClass('active');
+        $('#passwordForm').submit();
+    }
+    
+    // Profile picture modal functions
+    function openProfileModal() {
+        $('#profileModal').css('display', 'flex');
+    }
+    
+    function closeProfileModal() {
+        $('#profileModal').hide();
+        $('#profileForm')[0].reset();
+        $('#imagePreview').attr('src', $('#profileImagePreview').attr('src'));
+    }
+    
+    function previewImage(input) {
+        if (input.files && input.files[0]) {
+            const reader = new FileReader();
+            
+            reader.onload = function(e) {
+                $('#imagePreview').attr('src', e.target.result);
+            }
+            
+            reader.readAsDataURL(input.files[0]);
+        }
+    }
+    
+    function submitProfileForm() {
+        if (!$('#profile_picture').val()) {
+            Swal.fire({
+                title: 'Error',
+                text: 'Please select an image file to upload',
+                icon: 'error',
+                confirmButtonText: 'OK'
+            });
+            return;
+        }
+        
+        $('.loading-spinner').addClass('active');
+        $('#profileForm').submit();
+    }
     </script>
 </body>
 </html>

@@ -288,9 +288,7 @@ if (!$batch) {
                     </div>
                     
                     <!-- Number of Students -->
-                    <div class="form-group">
-                        <label for="num_students">Number of Students</label>
-                        <input type="number" id="num_students" name="num_students" class="form-control" value="<?= htmlspecialchars($batch['num_students']) ?>" min="0">
+                    <div >
                     </div>
                     
                     <!-- Mode -->

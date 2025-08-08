@@ -51,7 +51,25 @@ if ($lastWorkshop) {
 }
 
 // Handle add new workshop action
-if (isset($_POST['add_workshop'])) {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_workshop'])) {
+    $cover_image = ''; // Default empty
+    
+    // Handle file upload
+    if (isset($_FILES['cover_image_file']) && $_FILES['cover_image_file']['error'] === UPLOAD_ERR_OK) {
+        $uploadDir = '../uploads/workshops/';
+        if (!file_exists($uploadDir)) {
+            mkdir($uploadDir, 0777, true);
+        }
+        
+        $fileExt = pathinfo($_FILES['cover_image_file']['name'], PATHINFO_EXTENSION);
+        $fileName = 'workshop_' . $nextWorkshopId . '_' . time() . '.' . $fileExt;
+        $filePath = $uploadDir . $fileName;
+        
+        if (move_uploaded_file($_FILES['cover_image_file']['tmp_name'], $filePath)) {
+            $cover_image = $filePath;
+        }
+    }
+    
     $stmt = $db->prepare("INSERT INTO workshops (
         workshop_id, title, description, start_datetime, end_datetime, location, 
         max_participants, current_registrations, trainer_id, fee,
@@ -71,7 +89,7 @@ if (isset($_POST['add_workshop'])) {
         $_POST['fee'],
         $_POST['status'],
         $_SESSION['user_id'],
-        $_POST['cover_image'],
+        $cover_image,
         $_POST['requirements'],
         isset($_POST['certificate_available']) ? 1 : 0
     ]);
@@ -443,6 +461,51 @@ foreach ($registrationTrends as $trend) {
             transition: width 0.6s ease;
         }
         
+        /* New styles for file upload */
+        .thumbnail-preview {
+            width: 100%;
+            max-height: 200px;
+            object-fit: contain;
+            margin-bottom: 1rem;
+            border-radius: 0.5rem;
+            border: 1px dashed #e2e8f0;
+            padding: 0.5rem;
+        }
+        
+        .file-input-container {
+            position: relative;
+            overflow: hidden;
+            display: inline-block;
+            width: 100%;
+        }
+        
+        .file-input-button {
+            border: 1px solid #e2e8f0;
+            border-radius: 0.375rem;
+            padding: 0.5rem 1rem;
+            background-color: #f8fafc;
+            color: #4a5568;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+        }
+        
+        .file-input-button:hover {
+            background-color: #e2e8f0;
+        }
+        
+        .file-input {
+            position: absolute;
+            left: 0;
+            top: 0;
+            opacity: 0;
+            width: 100%;
+            height: 100%;
+            cursor: pointer;
+        }
+        
         @keyframes fadeIn {
             from { opacity: 0; }
             to { opacity: 1; }
@@ -712,7 +775,7 @@ foreach ($registrationTrends as $trend) {
                 <h3 class="text-xl font-semibold text-gray-800">Add New Workshop</h3>
                 <span class="close-modal">&times;</span>
             </div>
-            <form id="workshopForm" method="post" class="space-y-4">
+            <form id="workshopForm" method="post" class="space-y-4" enctype="multipart/form-data">
                 <input type="hidden" name="add_workshop" value="1">
                 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -809,9 +872,19 @@ foreach ($registrationTrends as $trend) {
                     
                     <!-- Cover Image -->
                     <div class="form-group">
-                        <label for="cover_image" class="form-label">Cover Image URL</label>
-                        <input type="text" id="cover_image" name="cover_image" 
-                               class="form-control">
+                        <label for="cover_image_file" class="form-label">Cover Image</label>
+                        <div class="thumbnail-preview mb-2 bg-gray-100 flex items-center justify-center" id="thumbnailPreview">
+                            <i class="fas fa-image text-gray-400 text-4xl"></i>
+                        </div>
+                        <div class="file-input-container">
+                            <div class="file-input-button">
+                                <i class="fas fa-upload mr-2"></i>
+                                <span id="fileLabel">Choose thumbnail image</span>
+                            </div>
+                            <input type="file" id="cover_image_file" name="cover_image_file" 
+                                   class="file-input" accept="image/*">
+                        </div>
+                        <small class="text-gray-500">Recommended size: 1200x630 pixels</small>
                     </div>
                 </div>
 
@@ -1006,6 +1079,24 @@ foreach ($registrationTrends as $trend) {
             // Auto-capitalize workshop title
             document.getElementById('title').addEventListener('blur', function() {
                 this.value = this.value.charAt(0).toUpperCase() + this.value.slice(1);
+            });
+            
+            // Cover image preview
+            document.getElementById('cover_image_file').addEventListener('change', function(e) {
+                const file = e.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        const preview = document.getElementById('thumbnailPreview');
+                        preview.innerHTML = ''; // Clear the icon
+                        preview.style.backgroundImage = `url(${e.target.result})`;
+                        preview.style.backgroundSize = 'contain';
+                        preview.style.backgroundPosition = 'center';
+                        preview.style.backgroundRepeat = 'no-repeat';
+                        document.getElementById('fileLabel').textContent = file.name;
+                    }
+                    reader.readAsDataURL(file);
+                }
             });
         });
         
