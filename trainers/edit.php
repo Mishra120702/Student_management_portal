@@ -642,7 +642,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 </head>
 <body class="bg-gray-50 text-gray-800">
     <?php include '../header.php'; ?>
-    
+    <?php include '../sidebar.php'; ?>
     <!-- Loading Spinner -->
     <div class="loading-spinner">
         <div class="spinner"></div>

@@ -492,7 +492,7 @@ $nextStudentId = generateStudentId($db);
                     
                     <!-- Form Actions -->
                     <div class="flex justify-end space-x-4 pt-8 border-t border-gray-200">
-                        <a href="students.php" class="px-6 py-3 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 btn-secondary">
+                        <a href="students_list.php" class="px-6 py-3 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 btn-secondary">
                             <i class="fas fa-times mr-2"></i> Cancel
                         </a>
                         <button type="submit" 

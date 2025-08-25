@@ -204,7 +204,7 @@ function getTrainerStatusDistribution(): array {
         }
         
         .trainer-avatar:hover {
-            transform: scale(1.1);
+            transform: scale(1.2);
         }
         .detail{
             transition: transform 0.2s;
@@ -814,15 +814,15 @@ function getTrainerStatusDistribution(): array {
                                     $avgRating = getTrainerAverageRating($trainer['id']);
                                     $joinDate = isset($trainer['join_date']) && $trainer['join_date'] ? new DateTime($trainer['join_date']) : null;
                                     ?>
-                                    <tr class="detail"><a href="view.php?id=<?= $trainer['id'] ?>">
+                                    <tr class="detail">
                                         <td>
                                             <div class="flex items-center">
-                                                
+                                                <a href="view.php?id=<?= $trainer['id'] ?>">
                                                 <img src="<?= getTrainerPhoto($trainer) ?>" 
                                                      class="trainer-avatar mr-3" 
                                                      alt="<?= htmlspecialchars($trainer['name']) ?>"
-                                                     onerror="this.src='../assets/images/default-avatar.svg'">
-                                                <div>
+                                                     onerror="this.src='../assets/images/default-avatar.svg'"></a>
+                                                <div><a href="view.php?id=<?= $trainer['id'] ?>">
                                                     <div class="font-medium"><?= htmlspecialchars($trainer['name']) ?></div>
                                                     <div class="text-sm text-gray-500"><?= htmlspecialchars($trainer['email']) ?></div>
                                                     <div class="text-xs text-gray-400 mt-1">
@@ -831,29 +831,29 @@ function getTrainerStatusDistribution(): array {
                                                         <?php else: ?>
                                                             <span class="text-gray-300">Join date N/A</span>
                                                         <?php endif; ?>
-                                                    </div>
+                                                    </div></a>
                                                 </div>
-                                            </div></a>
+                                            </div>
                                         </td>
-                                        <td>
+                                        <td><a href="view.php?id=<?= $trainer['id'] ?>">
                                             <?php if ($trainer['specialization']): ?>
                                                 <span class="badge badge-primary">
                                                     <?= htmlspecialchars($trainer['specialization']) ?>
                                                 </span>
                                             <?php else: ?>
                                                 <span class="text-gray-400">-</span>
-                                            <?php endif; ?>
+                                            <?php endif; ?></a>
                                         </td>
-                                        <td>
+                                        <td><a href="view.php?id=<?= $trainer['id'] ?>">
                                             <div class="flex items-center">
                                                 <span class="mr-2"><?= $trainer['years_of_experience'] ?? 0 ?> year<?= ($trainer['years_of_experience'] ?? 0) != 1 ? 's' : '' ?></span>
                                                 <div class="tooltip">
                                                     <i class="fas fa-info-circle text-gray-400"></i>
                                                     <span class="tooltip-text"><?= $trainer['years_of_experience'] ?? 0 ?> years of experience</span>
                                                 </div>
-                                            </div>
+                                            </div></a>
                                         </td>
-                                        <td>
+                                        <td><a href="view.php?id=<?= $trainer['id'] ?>">
                                             <div class="flex items-center">
                                                 <span class="badge badge-info mr-2">
                                                     <?= $batchCount ?>
@@ -863,9 +863,9 @@ function getTrainerStatusDistribution(): array {
                                                         <div class="progress-fill progress-primary" style="width: <?= min(100, ($batchCount / 5) * 100) ?>%"></div>
                                                     </div>
                                                 <?php endif; ?>
-                                            </div>
+                                            </div></a>
                                         </td>
-                                        <td>
+                                        <td><a href="view.php?id=<?= $trainer['id'] ?>">
                                             <?php if ($avgRating): ?>
                                                 <div class="star-rating flex items-center">
                                                     <?php for ($i = 1; $i <= 5; $i++): ?>
@@ -875,12 +875,12 @@ function getTrainerStatusDistribution(): array {
                                                 </div>
                                             <?php else: ?>
                                                 <span class="text-gray-400">-</span>
-                                            <?php endif; ?>
+                                            <?php endif; ?></a>
                                         </td>
-                                        <td>
+                                        <td><a href="view.php?id=<?= $trainer['id'] ?>">
                                             <span class="badge <?= $trainer['is_active'] ? 'badge-success' : 'badge-danger' ?>">
                                                 <?= $trainer['is_active'] ? 'Active' : 'Inactive' ?>
-                                            </span>
+                                            </span></a>
                                         </td>
                                         <td>
                                             <div class="flex space-x-2">

@@ -5,98 +5,146 @@ if (!isset($_SESSION['user_id']) || $_SESSION['user_role'] !== 'admin') {
     header("Location: ../login.php");
     exit;
 }
-
 // Get current month and last month dates
 $currentMonthStart = date('Y-m-01');
 $lastMonthStart = date('Y-m-01', strtotime('-1 month'));
 $lastMonthEnd = date('Y-m-t', strtotime('-1 month'));
 
-// Running Batches - current and last month comparison
-$running_batches = $db->query("SELECT COUNT(*) FROM batches WHERE status = 'ongoing'")->fetchColumn();
-$last_month_running = $db->query("SELECT COUNT(*) FROM batches WHERE status = 'ongoing' AND 
-                                 (start_date <= '$lastMonthEnd' AND (end_date >= '$lastMonthStart' OR end_date IS NULL))")->fetchColumn();
+// Prepare all database queries with parameterized statements to prevent SQL injection
+// Running Batches
+$stmt = $db->prepare("SELECT COUNT(*) FROM batches WHERE status = 'ongoing'");
+$stmt->execute();
+$running_batches = $stmt->fetchColumn();
+
+$stmt = $db->prepare("SELECT COUNT(*) FROM batches WHERE status = 'ongoing' AND 
+                     (start_date <= :lastMonthEnd AND (end_date >= :lastMonthStart OR end_date IS NULL))");
+$stmt->bindParam(':lastMonthEnd', $lastMonthEnd);
+$stmt->bindParam(':lastMonthStart', $lastMonthStart);
+$stmt->execute();
+$last_month_running = $stmt->fetchColumn();
 $running_diff = $running_batches - $last_month_running;
 
-// Upcoming Batches - current and last month comparison
-$upcoming_batches = $db->query("SELECT COUNT(*) FROM batches WHERE status = 'upcoming'")->fetchColumn();
-$last_month_upcoming = $db->query("SELECT COUNT(*) FROM batches WHERE status = 'upcoming' AND 
-                                  created_at BETWEEN '$lastMonthStart' AND '$lastMonthEnd'")->fetchColumn();
+// Upcoming Batches
+$stmt = $db->prepare("SELECT COUNT(*) FROM batches WHERE status = 'upcoming'");
+$stmt->execute();
+$upcoming_batches = $stmt->fetchColumn();
+
+$stmt = $db->prepare("SELECT COUNT(*) FROM batches WHERE status = 'upcoming' AND 
+                     created_at BETWEEN :lastMonthStart AND :lastMonthEnd");
+$stmt->bindParam(':lastMonthStart', $lastMonthStart);
+$stmt->bindParam(':lastMonthEnd', $lastMonthEnd);
+$stmt->execute();
+$last_month_upcoming = $stmt->fetchColumn();
 $upcoming_diff = $upcoming_batches - $last_month_upcoming;
 
-// Total Enrolled Students - current and last month comparison
-$total_students = $db->query("SELECT COUNT(*) FROM students WHERE current_status = 'active'")->fetchColumn();
-$last_month_students = $db->query("SELECT COUNT(*) FROM students WHERE current_status = 'active' AND 
-                                  enrollment_date <= '$lastMonthEnd'")->fetchColumn();
+// Total Enrolled Students
+$stmt = $db->prepare("SELECT COUNT(*) FROM students WHERE current_status = 'active'");
+$stmt->execute();
+$total_students = $stmt->fetchColumn();
+
+$stmt = $db->prepare("SELECT COUNT(*) FROM students WHERE current_status = 'active' AND 
+                     enrollment_date <= :lastMonthEnd");
+$stmt->bindParam(':lastMonthEnd', $lastMonthEnd);
+$stmt->execute();
+$last_month_students = $stmt->fetchColumn();
 $students_diff = $total_students - $last_month_students;
 
-// Classes Occurred (based on attendance records)
-$classes_occurred = $db->query("SELECT COUNT(DISTINCT date) FROM attendance")->fetchColumn();
-$last_month_classes = $db->query("SELECT COUNT(DISTINCT date) FROM attendance WHERE date BETWEEN '$lastMonthStart' AND '$lastMonthEnd'")->fetchColumn();
+// Classes Occurred
+$stmt = $db->prepare("SELECT COUNT(DISTINCT date) FROM attendance");
+$stmt->execute();
+$classes_occurred = $stmt->fetchColumn();
+
+$stmt = $db->prepare("SELECT COUNT(DISTINCT date) FROM attendance WHERE date BETWEEN :lastMonthStart AND :lastMonthEnd");
+$stmt->bindParam(':lastMonthStart', $lastMonthStart);
+$stmt->bindParam(':lastMonthEnd', $lastMonthEnd);
+$stmt->execute();
+$last_month_classes = $stmt->fetchColumn();
 $classes_diff = $classes_occurred - $last_month_classes;
 
-// Upcoming Live Classes (next 5) - Modified to fetch from today onward
-$upcoming_classes = $db->query("
+// Upcoming Live Classes
+$stmt = $db->prepare("
     SELECT schedule_date, start_time, end_time, topic, batch_id 
     FROM schedule 
     WHERE schedule_date >= CURDATE() AND is_cancelled = 0 
     ORDER BY schedule_date ASC, start_time ASC 
     LIMIT 5
-")->fetchAll(PDO::FETCH_ASSOC);
+");
+$stmt->execute();
+$upcoming_classes = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-// Recent Absentees (last 5)
-$recent_absentees = $db->query("
+// Recent Absentees
+$stmt = $db->prepare("
     SELECT student_name, date, batch_id 
     FROM attendance 
     WHERE status = 'Absent' 
     ORDER BY date DESC 
     LIMIT 2
-")->fetchAll(PDO::FETCH_ASSOC);
+");
+$stmt->execute();
+$recent_absentees = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-// Unaddressed Feedbacks - current and last month comparison
-$unaddressed_feedbacks = $db->query("
+// Unaddressed Feedbacks
+$stmt = $db->prepare("
     SELECT COUNT(*) FROM feedback 
     WHERE action_taken IS NULL OR action_taken = ''
-")->fetchColumn();
-$last_month_feedbacks = $db->query("
+");
+$stmt->execute();
+$unaddressed_feedbacks = $stmt->fetchColumn();
+
+$stmt = $db->prepare("
     SELECT COUNT(*) FROM feedback 
-    WHERE (action_taken IS NULL OR action_taken = '') AND date <= '$lastMonthEnd'
-")->fetchColumn();
+    WHERE (action_taken IS NULL OR action_taken = '') AND date <= :lastMonthEnd
+");
+$stmt->bindParam(':lastMonthEnd', $lastMonthEnd);
+$stmt->execute();
+$last_month_feedbacks = $stmt->fetchColumn();
 $feedbacks_diff = $unaddressed_feedbacks - $last_month_feedbacks;
 
 // Recent Messages
-$recent_msgs = $db->query("
+$stmt = $db->prepare("
     SELECT cm.message, cm.sent_at, u.name as sender_name
     FROM chat_messages cm
     JOIN users u ON cm.sender_id = u.id
     ORDER BY cm.sent_at DESC 
     LIMIT 3
-")->fetchAll(PDO::FETCH_ASSOC);
+");
+$stmt->execute();
+$recent_msgs = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-// Get unread notifications count
-$unread_notifications = $db->query("
+// Unread notifications count
+$stmt = $db->prepare("
     SELECT COUNT(*) FROM notifications 
-    WHERE user_id = {$_SESSION['user_id']} AND is_read = 0
-")->fetchColumn();
+    WHERE user_id = :user_id AND is_read = 0
+");
+$stmt->bindParam(':user_id', $_SESSION['user_id']);
+$stmt->execute();
+$unread_notifications = $stmt->fetchColumn();
 
-// Get pending feedback notifications
-$pending_feedbacks = $db->query("
+// Pending feedback notifications
+$stmt = $db->prepare("
     SELECT f.id, f.student_name, f.batch_id, f.feedback_text, f.date
     FROM feedback f
     WHERE (f.action_taken IS NULL OR f.action_taken = '')
     ORDER BY f.date DESC
     LIMIT 5
-")->fetchAll(PDO::FETCH_ASSOC);
+");
+$stmt->execute();
+$pending_feedbacks = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-// Get unread messages
-$unread_messages = $db->query("
+// Unread messages
+$stmt = $db->prepare("
     SELECT cm.id, cm.message, cm.sent_at, u.name as sender_name
     FROM chat_messages cm
     JOIN users u ON cm.sender_id = u.id
-    LEFT JOIN notifications n ON n.reference_id = cm.id AND n.type = 'message' AND n.user_id = {$_SESSION['user_id']}
-    WHERE (n.id IS NULL OR n.is_read = 0) AND cm.sender_id != {$_SESSION['user_id']}
+    LEFT JOIN notifications n ON n.reference_id = cm.id AND n.type = 'message' AND n.user_id = :user_id1
+    WHERE (n.id IS NULL OR n.is_read = 0) AND cm.sender_id != :user_id2
     ORDER BY cm.sent_at DESC
     LIMIT 5
-")->fetchAll(PDO::FETCH_ASSOC);
+");
+$stmt->bindParam(':user_id1', $_SESSION['user_id']);
+$stmt->bindParam(':user_id2', $_SESSION['user_id']);
+$stmt->execute();
+$unread_messages = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 // Batch status data for chart
 $batch_status_data = [
@@ -108,24 +156,30 @@ $batch_status_data = [
 
 // Check for new notifications since last visit
 $last_notification_check = $_SESSION['last_notification_check'] ?? 0;
-$new_notifications_count = $db->query("
+$stmt = $db->prepare("
     SELECT COUNT(*) FROM notifications 
-    WHERE user_id = {$_SESSION['user_id']} AND is_read = 0 AND created_at > FROM_UNIXTIME($last_notification_check)
-")->fetchColumn();
+    WHERE user_id = :user_id AND is_read = 0 AND created_at > FROM_UNIXTIME(:last_check)
+");
+$stmt->bindParam(':user_id', $_SESSION['user_id']);
+$stmt->bindParam(':last_check', $last_notification_check);
+$stmt->execute();
+$new_notifications_count = $stmt->fetchColumn();
 
 // Update last check time
 $_SESSION['last_notification_check'] = time();
 
 // Determine if we should play notification sound
 $play_notification_sound = $new_notifications_count > 0;
-?>
-<?php
-// At the top of dashboard.php, after session_start() if you have it
+
+// Success messages
 if (isset($_GET['success'])) {
-    if ($_GET['success'] === 'batch_created') {
-        echo '<script>alert("Batch created successfully!");</script>';
-    } elseif ($_GET['success'] === 'notification_marked') {
-        echo '<script>alert("Notifications marked as read!");</script>';
+    $success_messages = [
+        'batch_created' => "Batch created successfully!",
+        'notification_marked' => "Notifications marked as read!"
+    ];
+    
+    if (array_key_exists($_GET['success'], $success_messages)) {
+        $success_message = htmlspecialchars($success_messages[$_GET['success']]);
     }
 }
 ?>
@@ -135,12 +189,34 @@ if (isset($_GET['success'])) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin Dashboard - ASD Academy</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
+        :root {
+            --primary: #3B82F6;
+            --primary-light: #EFF6FF;
+            --secondary: #10B981;
+            --danger: #EF4444;
+            --warning: #F59E0B;
+            --info: #6366F1;
+            --dark: #1F2937;
+            --light: #F9FAFB;
+            --gray: #6B7280;
+        }
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #F3F4F6;
+            color: var(--dark);
+        }
+        
+        /* Notification styles */
         .notification-badge {
             position: absolute;
             top: -5px;
             right: -5px;
-            background-color: #ef4444;
+            background-color: var(--danger);
             color: white;
             border-radius: 50%;
             width: 20px;
@@ -149,164 +225,216 @@ if (isset($_GET['success'])) {
             align-items: center;
             justify-content: center;
             font-size: 12px;
+            font-weight: 600;
+            z-index: 10;
         }
+        
         .notification-badge.animate-pulse {
-            animation: pulse 2s infinite;
+            animation: pulse 1.5s infinite;
         }
-        .notification-item {
-            padding: 10px;
-            border-bottom: 1px solid #eee;
-            cursor: pointer;
-            transition: background-color 0.2s;
-        }
-        .notification-item:hover {
-            background-color: #f5f5f5;
-        }
-        .notification-time {
-            font-size: 12px;
-            color: #666;
-        }
-        .notification-type {
-            font-weight: bold;
-            margin-right: 5px;
-        }
-        .notification-message {
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-        .notification-dot {
-            position: absolute;
-            top: 5px;
-            right: 5px;
-            width: 8px;
-            height: 8px;
-            background-color: #ef4444;
-            border-radius: 50%;
-            display: none;
-        }
+        
         @keyframes pulse {
-            0% { transform: scale(1); }
-            50% { transform: scale(1.1); }
-            100% { transform: scale(1); }
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.2); opacity: 0.8; }
         }
+        
+        /* Notification dropdown */
         #notificationDropdown {
             transform-origin: top right;
             box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04);
-        }
-        #notificationDropdown.opacity-0 {
+            transition: all 0.2s cubic-bezier(0.68, -0.55, 0.265, 1.55);
             opacity: 0;
+            transform: scale(0.95) translateY(-10px);
+            visibility: hidden;
         }
-        #notificationDropdown.opacity-100 {
+        
+        #notificationDropdown.show {
             opacity: 1;
+            transform: scale(1) translateY(0);
+            visibility: visible;
         }
-        #notificationDropdown.scale-95 {
-            transform: scale(0.95);
+        
+        .notification-item {
+            transition: all 0.2s ease;
+            position: relative;
+            overflow: hidden;
         }
-        #notificationDropdown.scale-100 {
-            transform: scale(1);
+        
+        .notification-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06);
         }
-        .ripple-effect {
+        
+        .notification-item::after {
+            content: '';
             position: absolute;
-            border-radius: 50%;
-            background-color: rgba(59, 130, 246, 0.3);
-            transform: scale(0);
-            animation: ripple 0.6s linear;
-            pointer-events: none;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(to right, rgba(255,255,255,0) 0%, rgba(255,255,255,0.8) 50%, rgba(255,255,255,0) 100%);
+            transform: translateX(-100%);
+            transition: transform 0.6s ease;
         }
+        
+        .notification-item:hover::after {
+            transform: translateX(100%);
+        }
+        
+        /* Card styles */
+        .metric-card {
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .metric-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04);
+        }
+        
+        .metric-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 4px;
+            height: 0;
+            background: linear-gradient(to bottom, var(--primary), var(--info));
+            transition: height 0.3s ease;
+        }
+        
+        .metric-card:hover::before {
+            height: 100%;
+        }
+        
+        /* Info card styles */
+        .info-card {
+            transition: all 0.3s ease;
+        }
+        
+        .info-card:hover {
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06);
+        }
+        
+        /* Quick action buttons */
+        .quick-action {
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .quick-action:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05);
+        }
+        
+        .quick-action::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 5px;
+            height: 5px;
+            background: rgba(255,255,255,0.5);
+            opacity: 0;
+            border-radius: 100%;
+            transform: scale(1, 1) translate(-50%);
+            transform-origin: 50% 50%;
+        }
+        
+        .quick-action:focus:not(:active)::after {
+            animation: ripple 1s ease-out;
+        }
+        
         @keyframes ripple {
-            to {
-                transform: scale(4);
+            0% {
+                transform: scale(0, 0);
+                opacity: 0.5;
+            }
+            100% {
+                transform: scale(20, 20);
                 opacity: 0;
             }
         }
-        .notification-item {
-            transition: background-color 0.2s ease, transform 0.2s ease;
+        
+        /* Floating animation for notification bell */
+        @keyframes float {
+            0% { transform: translateY(0px); }
+            50% { transform: translateY(-5px); }
+            100% { transform: translateY(0px); }
         }
         
-        /* Bulb notification styles */
-        .bulb-container {
-            position: relative;
-            display: inline-block;
+        .notification-float {
+            animation: float 3s ease-in-out infinite;
         }
-        .bulb {
+        
+        /* Glow effect for important notifications */
+        @keyframes glow {
+            0% { box-shadow: 0 0 5px rgba(239, 68, 68, 0.5); }
+            50% { box-shadow: 0 0 20px rgba(239, 68, 68, 0.8); }
+            100% { box-shadow: 0 0 5px rgba(239, 68, 68, 0.5); }
+        }
+        
+        .notification-glow {
+            animation: glow 2s infinite;
+        }
+        
+        /* Modern notification icon */
+        .notification-icon {
+            position: relative;
             width: 24px;
             height: 24px;
+        }
+        
+        .notification-icon i {
             position: relative;
+            z-index: 2;
         }
-        .bulb-light {
+        
+        .notification-icon::before {
+            content: '';
             position: absolute;
-            width: 100%;
-            height: 100%;
+            top: -5px;
+            right: -5px;
+            width: 12px;
+            height: 12px;
+            background-color: var(--danger);
             border-radius: 50%;
-            background: #f8f8f8;
-            box-shadow: 
-                0 0 10px #fff,
-                0 0 20px #fff,
-                0 0 30px #fff,
-                0 0 40px #ff0,
-                0 0 70px #ff0,
-                0 0 80px #ff0,
-                0 0 100px #ff0,
-                0 0 150px #ff0;
+            border: 2px solid white;
+            z-index: 3;
             opacity: 0;
-            transition: opacity 0.3s ease;
+            transform: scale(0);
+            transition: all 0.3s ease;
         }
-        .bulb-light.active {
+        
+        .notification-icon.has-notifications::before {
             opacity: 1;
-            animation: bulb-flicker 2s infinite alternate;
+            transform: scale(1);
         }
-        @keyframes bulb-flicker {
-            0%, 19.999%, 22%, 62.999%, 64%, 64.999%, 70%, 100% {
-                opacity: 1;
-                box-shadow: 
-                    0 0 10px #fff,
-                    0 0 20px #fff,
-                    0 0 30px #fff,
-                    0 0 40px #ff0,
-                    0 0 70px #ff0,
-                    0 0 80px #ff0,
-                    0 0 100px #ff0,
-                    0 0 150px #ff0;
+        
+        /* Responsive adjustments */
+        @media (max-width: 768px) {
+            .grid-cols-1 {
+                grid-template-columns: 1fr;
             }
-            20%, 21.999%, 63%, 63.999%, 65%, 69.999% {
-                opacity: 0.8;
-                box-shadow: 
-                    0 0 5px #fff,
-                    0 0 10px #fff,
-                    0 0 15px #fff,
-                    0 0 20px #ff0,
-                    0 0 35px #ff0,
-                    0 0 40px #ff0,
-                    0 0 50px #ff0,
-                    0 0 75px #ff0;
+            
+            .lg\:grid-cols-3 {
+                grid-template-columns: 1fr;
             }
-        }
-        .bulb-filament {
-            position: absolute;
-            width: 2px;
-            height: 8px;
-            background: #333;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-        }
-        .bulb-base {
-            position: absolute;
-            width: 8px;
-            height: 4px;
-            background: #888;
-            bottom: -4px;
-            left: 50%;
-            transform: translateX(-50%);
-            border-radius: 0 0 4px 4px;
+            
+            .lg\:col-span-2 {
+                grid-column: span 1;
+            }
         }
     </style>
 </head>
-<body class="bg-gray-50 text-gray-800">
-<?php include '../header.php'; // Include header with CSS and JS links
-    include '../sidebar.php'; // Include sidebar
+<body class="bg-gray-50">
+<?php 
+include '../header.php';
+include '../sidebar.php';
 ?>
+
 <!-- Audio element for notification sound (hidden) -->
 <audio id="notificationSound" preload="auto">
     <source src="../assets/sounds/notification.mp3" type="audio/mpeg">
@@ -326,23 +454,17 @@ if (isset($_GET['success'])) {
         </h1>
         <div class="flex items-center space-x-4">
             <div class="relative">
-                <button id="notificationButton" class="p-2 rounded-full hover:bg-gray-100 relative transition-colors duration-200">
-                    <div class="bulb-container">
-                        <div class="bulb">
-                            <div class="bulb-light <?= $unread_notifications > 0 ? 'active' : '' ?>"></div>
-                            <div class="bulb-filament"></div>
-                            <div class="bulb-base"></div>
-                        </div>
+                <button id="notificationButton" class="p-2 rounded-full hover:bg-gray-100 relative transition-colors duration-200 notification-float">
+                    <div class="notification-icon <?= $unread_notifications > 0 ? 'has-notifications' : '' ?>">
                         <i class="fas fa-bell text-gray-600"></i>
                     </div>
                     <?php if ($unread_notifications > 0): ?>
                         <span class="notification-badge animate-pulse"><?= $unread_notifications ?></span>
                     <?php endif; ?>
-                    <span id="notificationDot" class="notification-dot <?= $new_notifications_count > 0 ? 'block' : 'hidden' ?>"></span>
                 </button>
                 
                 <!-- Notification Dropdown -->
-                <div id="notificationDropdown" class="hidden absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-xl z-50 border border-gray-200 transform origin-top-right transition-all duration-300 ease-out opacity-0 scale-95">
+                <div id="notificationDropdown" class="absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-xl z-50 border border-gray-200 hidden">
                     <div class="p-4 border-b border-gray-200 flex justify-between items-center bg-gradient-to-r from-blue-50 to-purple-50">
                         <h3 class="font-semibold text-gray-800 flex items-center">
                             <i class="fas fa-bell mr-2 text-blue-600"></i>
@@ -357,23 +479,20 @@ if (isset($_GET['success'])) {
                     <div class="max-h-96 overflow-y-auto">
                         <?php if (count($pending_feedbacks) > 0 || count($unread_messages) > 0): ?>
                             <?php foreach ($pending_feedbacks as $feedback): ?>
-                                <a href="../dashboard/pending_feedbacks.php" class="block transform hover:scale-[1.01] transition-transform duration-200">
-                                    <div class="notification-item px-4 py-3 hover:bg-blue-50 border-b border-gray-100 last:border-0">
+                                <a href="../dashboard/pending_feedbacks.php" class="block">
+                                    <div class="notification-item px-4 py-3 hover:bg-blue-50 border-b border-gray-100 last:border-0 <?= array_search($feedback, $pending_feedbacks) === 0 ? 'notification-glow' : '' ?>">
                                         <div class="flex items-start">
                                             <div class="relative flex-shrink-0">
                                                 <div class="bg-red-100 text-red-600 p-2 rounded-full mr-3 flex items-center justify-center h-10 w-10">
                                                     <i class="fas fa-comment-dots"></i>
                                                 </div>
-                                                <?php if (array_search($feedback, $pending_feedbacks) === 0): ?>
-                                                    <span class="absolute -top-1 -right-1 h-3 w-3 bg-red-500 rounded-full border-2 border-white"></span>
-                                                <?php endif; ?>
                                             </div>
                                             <div class="flex-1 min-w-0">
                                                 <div class="flex justify-between items-start">
-                                                    <span class="notification-type font-medium text-gray-900 truncate">New Feedback</span>
-                                                    <span class="notification-time text-xs text-gray-500 whitespace-nowrap ml-2"><?= date('M j, g:i A', strtotime($feedback['date'])) ?></span>
+                                                    <span class="font-medium text-gray-900 truncate">New Feedback</span>
+                                                    <span class="text-xs text-gray-500 whitespace-nowrap ml-2"><?= date('M j, g:i A', strtotime($feedback['date'])) ?></span>
                                                 </div>
-                                                <div class="notification-message text-sm text-gray-600 mt-1 truncate">
+                                                <div class="text-sm text-gray-600 mt-1 truncate">
                                                     From <?= htmlspecialchars($feedback['student_name']) ?> (Batch <?= $feedback['batch_id'] ?>)
                                                 </div>
                                                 <div class="mt-2 text-xs text-red-600 font-medium flex items-center">
@@ -386,23 +505,20 @@ if (isset($_GET['success'])) {
                             <?php endforeach; ?>
                             
                             <?php foreach ($unread_messages as $message): ?>
-                                <a href="../chat/index.php" class="block transform hover:scale-[1.01] transition-transform duration-200">
+                                <a href="../chat/index.php" class="block">
                                     <div class="notification-item px-4 py-3 hover:bg-blue-50 border-b border-gray-100 last:border-0">
                                         <div class="flex items-start">
                                             <div class="relative flex-shrink-0">
                                                 <div class="bg-blue-100 text-blue-600 p-2 rounded-full mr-3 flex items-center justify-center h-10 w-10">
                                                     <i class="fas fa-comment"></i>
                                                 </div>
-                                                <?php if (array_search($message, $unread_messages) === 0): ?>
-                                                    <span class="absolute -top-1 -right-1 h-3 w-3 bg-blue-500 rounded-full border-2 border-white"></span>
-                                                <?php endif; ?>
                                             </div>
                                             <div class="flex-1 min-w-0">
                                                 <div class="flex justify-between items-start">
-                                                    <span class="notification-type font-medium text-gray-900 truncate">New Message</span>
-                                                    <span class="notification-time text-xs text-gray-500 whitespace-nowrap ml-2"><?= date('M j, g:i A', strtotime($message['sent_at'])) ?></span>
+                                                    <span class="font-medium text-gray-900 truncate">New Message</span>
+                                                    <span class="text-xs text-gray-500 whitespace-nowrap ml-2"><?= date('M j, g:i A', strtotime($message['sent_at'])) ?></span>
                                                 </div>
-                                                <div class="notification-message text-sm text-gray-600 mt-1">
+                                                <div class="text-sm text-gray-600 mt-1">
                                                     <span class="font-medium"><?= htmlspecialchars($message['sender_name']) ?>:</span> 
                                                     <?= htmlspecialchars(substr($message['message'], 0, 50)) ?>...
                                                 </div>
@@ -436,10 +552,21 @@ if (isset($_GET['success'])) {
     </header>
 
     <div class="p-4 md:p-6">
+        <?php if (isset($success_message)): ?>
+            <div class="bg-green-100 border-l-4 border-green-500 text-green-700 p-4 mb-6 rounded-lg animate-fade-in" role="alert">
+                <div class="flex items-center">
+                    <div class="py-1"><i class="fas fa-check-circle mr-3 text-green-500"></i></div>
+                    <div>
+                        <p class="font-bold">Success</p>
+                        <p><?= $success_message ?></p>
+                    </div>
+                </div>
+            </div>
+        <?php endif; ?>
+        
         <!-- Metrics -->
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-            <a href="../dashboard/running_batches.php">
-            <div class="metric-card bg-white p-5 rounded-xl shadow transition-all duration-200 border-l-4 border-blue-500">
+            <a href="../dashboard/running_batches.php" class="metric-card bg-white p-5 rounded-xl shadow transition-all duration-200 border-l-4 border-blue-500 hover:border-blue-600">
                 <div class="flex justify-between items-start">
                     <div>
                         <p class="text-sm font-medium text-gray-500">Running Batches</p>
@@ -458,9 +585,9 @@ if (isset($_GET['success'])) {
                         <span>No change</span> from last month
                     <?php endif; ?>
                 </p>
-            </div></a>
-            <a href="../dashboard/upcoming_batches.php">
-            <div class="metric-card bg-white p-5 rounded-xl shadow transition-all duration-200 border-l-4 border-purple-500">
+            </a>
+            
+            <a href="../dashboard/upcoming_batches.php" class="metric-card bg-white p-5 rounded-xl shadow transition-all duration-200 border-l-4 border-purple-500 hover:border-purple-600">
                 <div class="flex justify-between items-start">
                     <div>
                         <p class="text-sm font-medium text-gray-500">Upcoming Batches</p>
@@ -479,9 +606,9 @@ if (isset($_GET['success'])) {
                         <span>No change</span> from last month
                     <?php endif; ?>
                 </p>
-            </div></a>
-            <a href="../dashboard/enrolled_students.php">
-            <div class="metric-card bg-white p-5 rounded-xl shadow transition-all duration-200 border-l-4 border-green-500">
+            </a>
+            
+            <a href="../dashboard/enrolled_students.php" class="metric-card bg-white p-5 rounded-xl shadow transition-all duration-200 border-l-4 border-green-500 hover:border-green-600">
                 <div class="flex justify-between items-start">
                     <div>
                         <p class="text-sm font-medium text-gray-500">Enrolled Students</p>
@@ -500,9 +627,9 @@ if (isset($_GET['success'])) {
                         <span>No change</span> from last month
                     <?php endif; ?>
                 </p>
-            </div></a>
-            <a href="../dashboard/classes_occurred.php">
-            <div class="metric-card bg-white p-5 rounded-xl shadow transition-all duration-200 border-l-4 border-yellow-500">
+            </a>
+            
+            <a href="../dashboard/classes_occurred.php" class="metric-card bg-white p-5 rounded-xl shadow transition-all duration-200 border-l-4 border-yellow-500 hover:border-yellow-600">
                 <div class="flex justify-between items-start">
                     <div>
                         <p class="text-sm font-medium text-gray-500">Classes Occurred</p>
@@ -521,9 +648,9 @@ if (isset($_GET['success'])) {
                         <span>No change</span> from last month
                     <?php endif; ?>
                 </p>
-            </div></a>
-            <a href="../dashboard/pending_feedbacks.php">
-            <div class="metric-card bg-white p-5 rounded-xl shadow transition-all duration-200 border-l-4 border-red-500">
+            </a>
+            
+            <a href="../dashboard/pending_feedbacks.php" class="metric-card bg-white p-5 rounded-xl shadow transition-all duration-200 border-l-4 border-red-500 hover:border-red-600">
                 <div class="flex justify-between items-start">
                     <div>
                         <p class="text-sm font-medium text-gray-500">Pending Feedbacks</p>
@@ -542,8 +669,8 @@ if (isset($_GET['success'])) {
                         <span>No change</span> from last month
                     <?php endif; ?>
                 </p>
-            </div>
-        </div></a>
+            </a>
+        </div>
 
         <!-- Charts and Info Section -->
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
@@ -589,7 +716,7 @@ if (isset($_GET['success'])) {
                     </div>
                     <div class="space-y-3">
                         <?php foreach ($upcoming_classes as $class): ?>
-                            <div class="flex items-start p-3 bg-gray-50 rounded-lg border border-gray-100">
+                            <div class="flex items-start p-3 bg-gray-50 rounded-lg border border-gray-100 hover:border-blue-200 transition-all duration-200">
                                 <div class="bg-blue-100 text-blue-600 p-2 rounded-lg mr-3">
                                     <i class="fas fa-chalkboard-teacher"></i>
                                 </div>
@@ -621,7 +748,7 @@ if (isset($_GET['success'])) {
                     </div>
                     <div class="space-y-3">
                         <?php foreach ($recent_absentees as $absent): ?>
-                            <div class="flex items-center p-3 bg-red-50 rounded-lg border border-red-100">
+                            <div class="flex items-center p-3 bg-red-50 rounded-lg border border-red-100 hover:border-red-200 transition-all duration-200">
                                 <div class="bg-red-100 text-red-600 p-2 rounded-lg mr-3">
                                     <i class="fas fa-user-times"></i>
                                 </div>
@@ -635,6 +762,11 @@ if (isset($_GET['success'])) {
                                 </button>
                             </div>
                         <?php endforeach; ?>
+                        <?php if (empty($recent_absentees)): ?>
+                            <div class="p-3 bg-gray-50 rounded-lg border border-gray-100 text-center text-gray-500">
+                                No recent absentees.
+                            </div>
+                        <?php endif; ?>
                     </div>
                 </div>
             </div>
@@ -650,7 +782,7 @@ if (isset($_GET['success'])) {
                 </div>
                 <div class="space-y-3">
                     <?php foreach ($recent_msgs as $msg): ?>
-                        <div class="flex items-start p-3 bg-blue-50 rounded-lg border border-blue-100">
+                        <div class="flex items-start p-3 bg-blue-50 rounded-lg border border-blue-100 hover:border-blue-200 transition-all duration-200">
                             <div class="bg-blue-100 text-blue-600 p-2 rounded-lg mr-3">
                                 <i class="fas fa-comment"></i>
                             </div>
@@ -660,6 +792,11 @@ if (isset($_GET['success'])) {
                             </div>
                         </div>
                     <?php endforeach; ?>
+                    <?php if (empty($recent_msgs)): ?>
+                        <div class="p-3 bg-gray-50 rounded-lg border border-gray-100 text-center text-gray-500">
+                            No recent messages.
+                        </div>
+                    <?php endif; ?>
                 </div>
             </div>
 
@@ -667,25 +804,25 @@ if (isset($_GET['success'])) {
             <div class="bg-white p-5 rounded-xl shadow info-card">
                 <h2 class="text-lg font-semibold text-gray-800 mb-4">Quick Actions</h2>
                 <div class="grid grid-cols-2 gap-3">
-                    <a href="add_batch.php" class="flex flex-col items-center justify-center p-4 bg-blue-50 rounded-lg border border-blue-100 hover:bg-blue-100 transition-colors">
+                    <a href="add_batch.php" class="quick-action flex flex-col items-center justify-center p-4 bg-blue-50 rounded-lg border border-blue-100 hover:bg-blue-100 transition-colors">
                         <div class="bg-blue-100 text-blue-600 p-3 rounded-full mb-2">
                             <i class="fas fa-plus"></i>
                         </div>
                         <span class="text-sm font-medium text-center">Add Batch</span>
                     </a>
-                    <a href="../attendance/attendance.php" class="flex flex-col items-center justify-center p-4 bg-green-50 rounded-lg border border-green-100 hover:bg-green-100 transition-colors">
+                    <a href="../attendance/attendance.php" class="quick-action flex flex-col items-center justify-center p-4 bg-green-50 rounded-lg border border-green-100 hover:bg-green-100 transition-colors">
                         <div class="bg-green-100 text-green-600 p-3 rounded-full mb-2">
                             <i class="fas fa-clipboard-check"></i>
                         </div>
                         <span class="text-sm font-medium text-center">Mark Attendance</span>
                     </a>
-                    <a href="../exam/exams.php" class="flex flex-col items-center justify-center p-4 bg-purple-50 rounded-lg border border-purple-100 hover:bg-purple-100 transition-colors">
+                    <a href="../exam/exams.php" class="quick-action flex flex-col items-center justify-center p-4 bg-purple-50 rounded-lg border border-purple-100 hover:bg-purple-100 transition-colors">
                         <div class="bg-purple-100 text-purple-600 p-3 rounded-full mb-2">
                             <i class="fas fa-file-alt"></i>
                         </div>
                         <span class="text-sm font-medium text-center">Create Exam</span>
                     </a>
-                    <a href="../content/upload_content.php" class="flex flex-col items-center justify-center p-4 bg-yellow-50 rounded-lg border border-yellow-100 hover:bg-yellow-100 transition-colors">
+                    <a href="../content/upload_content.php" class="quick-action flex flex-col items-center justify-center p-4 bg-yellow-50 rounded-lg border border-yellow-100 hover:bg-yellow-100 transition-colors">
                         <div class="bg-yellow-100 text-yellow-600 p-3 rounded-full mb-2">
                             <i class="fas fa-upload"></i>
                         </div>
@@ -696,54 +833,55 @@ if (isset($_GET['success'])) {
         </div>
     </div>
 </div>
+
 <script>
     // Play notification sound if there are new notifications
     document.addEventListener('DOMContentLoaded', function() {
         <?php if ($play_notification_sound): ?>
             const notificationSound = document.getElementById('notificationSound');
-            notificationSound.volume = 0.3; // Set volume to 30%
+            notificationSound.volume = 0.3;
             notificationSound.play().catch(e => console.log('Notification sound play failed:', e));
             
-            // Make bulb flicker more intensely when there are new notifications
-            const bulbLight = document.querySelector('.bulb-light');
-            if (bulbLight) {
-                bulbLight.style.animation = 'bulb-flicker 1s infinite alternate';
+            // Add animation to notification icon
+            const notificationIcon = document.querySelector('.notification-icon');
+            if (notificationIcon) {
+                notificationIcon.classList.add('animate-pulse');
+                setTimeout(() => {
+                    notificationIcon.classList.remove('animate-pulse');
+                }, 3000);
             }
         <?php endif; ?>
+        
+        // Show success message with animation
+        const successMessage = document.querySelector('.animate-fade-in');
+        if (successMessage) {
+            setTimeout(() => {
+                successMessage.style.opacity = '0';
+                successMessage.style.transition = 'opacity 1s ease';
+                setTimeout(() => {
+                    successMessage.remove();
+                }, 1000);
+            }, 5000);
+        }
     });
 
     // Enhanced notification dropdown toggle with animations
     const notificationButton = document.getElementById('notificationButton');
     const notificationDropdown = document.getElementById('notificationDropdown');
-    const notificationDot = document.getElementById('notificationDot');
-    let isDropdownOpen = false;
-
+    const notificationDot = document.querySelector('.notification-icon::before');
+    
     notificationButton.addEventListener('click', function(e) {
         e.stopPropagation();
         
-        if (isDropdownOpen) {
-            // Close dropdown with animation
-            notificationDropdown.classList.remove('opacity-100', 'scale-100');
-            notificationDropdown.classList.add('opacity-0', 'scale-95');
-            setTimeout(() => {
-                notificationDropdown.classList.add('hidden');
-            }, 200);
-        } else {
+        if (notificationDropdown.classList.contains('hidden')) {
             // Open dropdown with animation
             notificationDropdown.classList.remove('hidden');
             setTimeout(() => {
-                notificationDropdown.classList.remove('opacity-0', 'scale-95');
-                notificationDropdown.classList.add('opacity-100', 'scale-100');
+                notificationDropdown.classList.add('show');
             }, 10);
             
-            // Hide the red dot when dropdown is opened
-            notificationDot.classList.add('hidden');
-            
-            // Turn off bulb light when notifications are viewed
-            const bulbLight = document.querySelector('.bulb-light');
-            if (bulbLight) {
-                bulbLight.classList.remove('active');
-            }
+            // Hide the notification dot when dropdown is opened
+            document.querySelector('.notification-icon').classList.remove('has-notifications');
             
             // Mark notifications as seen via AJAX
             fetch('../notifications/mark_notifications_seen.php', {
@@ -753,19 +891,21 @@ if (isset($_GET['success'])) {
                 },
                 body: JSON.stringify({}),
             }).catch(error => console.error('Error:', error));
+        } else {
+            // Close dropdown with animation
+            notificationDropdown.classList.remove('show');
+            setTimeout(() => {
+                notificationDropdown.classList.add('hidden');
+            }, 200);
         }
-        
-        isDropdownOpen = !isDropdownOpen;
     });
     
     // Close dropdown when clicking outside
     document.addEventListener('click', function() {
-        if (isDropdownOpen) {
-            notificationDropdown.classList.remove('opacity-100', 'scale-100');
-            notificationDropdown.classList.add('opacity-0', 'scale-95');
+        if (!notificationDropdown.classList.contains('hidden')) {
+            notificationDropdown.classList.remove('show');
             setTimeout(() => {
                 notificationDropdown.classList.add('hidden');
-                isDropdownOpen = false;
             }, 200);
         }
     });
@@ -775,9 +915,9 @@ if (isset($_GET['success'])) {
         e.stopPropagation();
     });
 
-    // Add ripple effect to notification items
-    document.querySelectorAll('.notification-item').forEach(item => {
-        item.addEventListener('click', function(e) {
+    // Add ripple effect to quick action buttons
+    document.querySelectorAll('.quick-action').forEach(button => {
+        button.addEventListener('click', function(e) {
             // Create ripple element
             const ripple = document.createElement('span');
             ripple.classList.add('ripple-effect');
@@ -789,7 +929,7 @@ if (isset($_GET['success'])) {
             ripple.style.left = `${e.clientX - rect.left - size/2}px`;
             ripple.style.top = `${e.clientY - rect.top - size/2}px`;
             
-            // Add ripple to the item
+            // Add ripple to the button
             this.appendChild(ripple);
             
             // Remove ripple after animation
@@ -799,7 +939,7 @@ if (isset($_GET['success'])) {
         });
     });
 
-    // Batch Status Chart
+    // Batch Status Chart with animation
     const batchCtx = document.getElementById('batchChart').getContext('2d');
     const batchChart = new Chart(batchCtx, {
         type: 'doughnut',
@@ -823,8 +963,26 @@ if (isset($_GET['success'])) {
                     display: false
                 }
             },
+            animation: {
+                animateScale: true,
+                animateRotate: true
+            },
             maintainAspectRatio: false
         }
     });
+    
+    // Add hover effect to metric cards
+    document.querySelectorAll('.metric-card').forEach(card => {
+        card.addEventListener('mouseenter', function() {
+            this.style.transform = 'translateY(-5px)';
+            this.style.boxShadow = '0 10px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04)';
+        });
+        
+        card.addEventListener('mouseleave', function() {
+            this.style.transform = '';
+            this.style.boxShadow = '';
+        });
+    });
 </script>
-<?php include '../footer.php'; // Include footer with scripts ?>
+
+<?php include '../footer.php'; ?>

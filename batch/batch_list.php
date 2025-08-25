@@ -137,6 +137,10 @@ $batches = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 <button id="openModalBtn" class="btn-primary">
                     <i class="fas fa-plus"></i> Add New Batch
                 </button>
+                <!-- Add Excel Upload Button -->
+                <a href="upload_batch.php" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg flex items-center">
+                    <i class="fas fa-file-excel mr-2"></i> Upload Excel
+                </a>
             </div>
             
             <!-- Filter Card -->

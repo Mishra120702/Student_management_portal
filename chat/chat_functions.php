@@ -10,14 +10,20 @@ function getAdminConversations($admin_id) {
     $query = "SELECT c.id, c.conversation_type, 
                      CONCAT(s.first_name, ' ', s.last_name) as name,
                      (SELECT COUNT(*) FROM chat_messages m 
-                      WHERE m.conversation_id = c.id AND m.sender_id != ? AND m.is_read = 0) as unread
+                      WHERE m.conversation_id = c.id AND m.sender_id != ? AND m.is_read = 0) as unread,
+                     c.is_active
               FROM chat_conversations c
               JOIN students s ON c.student_id = s.student_id
-              WHERE c.admin_id = ? AND c.conversation_type = 'admin_student'
+              JOIN chat_participants p ON c.id = p.conversation_id
+              WHERE c.admin_id = ? 
+              AND c.conversation_type = 'admin_student'
+              AND p.user_id = ?
+              AND p.is_active = TRUE
+              AND c.is_active = TRUE
               ORDER BY c.updated_at DESC";
     
     $stmt = $db->prepare($query);
-    $stmt->execute([$admin_id, $admin_id]);
+    $stmt->execute([$admin_id, $admin_id, $admin_id]);
     $result = $stmt->fetchAll(PDO::FETCH_ASSOC);
     
     foreach ($result as $row) {
@@ -28,14 +34,20 @@ function getAdminConversations($admin_id) {
     $query = "SELECT c.id, c.conversation_type, 
                      CONCAT('Batch: ', b.batch_id, ' - ', b.course_name) as name,
                      (SELECT COUNT(*) FROM chat_messages m 
-                      WHERE m.conversation_id = c.id AND m.sender_id != ? AND m.is_read = 0) as unread
+                      WHERE m.conversation_id = c.id AND m.sender_id != ? AND m.is_read = 0) as unread,
+                     c.is_active
               FROM chat_conversations c
               JOIN batches b ON c.batch_id = b.batch_id
-              WHERE c.admin_id = ? AND c.conversation_type = 'admin_batch'
+              JOIN chat_participants p ON c.id = p.conversation_id
+              WHERE c.admin_id = ? 
+              AND c.conversation_type = 'admin_batch'
+              AND p.user_id = ?
+              AND p.is_active = TRUE
+              AND c.is_active = TRUE
               ORDER BY c.updated_at DESC";
     
     $stmt = $db->prepare($query);
-    $stmt->execute([$admin_id, $admin_id]);
+    $stmt->execute([$admin_id, $admin_id, $admin_id]);
     $result = $stmt->fetchAll(PDO::FETCH_ASSOC);
     
     foreach ($result as $row) {
@@ -143,6 +155,16 @@ function getOrCreateStudentConversation($admin_id, $student_id) {
     $result = $stmt->fetch(PDO::FETCH_ASSOC);
     
     if ($result) {
+        // Reactivate if it was deactivated
+        $query = "UPDATE chat_conversations SET is_active = TRUE WHERE id = ?";
+        $stmt = $db->prepare($query);
+        $stmt->execute([$result['id']]);
+        
+        // Reactivate participants
+        $query = "UPDATE chat_participants SET is_active = TRUE WHERE conversation_id = ?";
+        $stmt = $db->prepare($query);
+        $stmt->execute([$result['id']]);
+        
         return $result['id'];
     }
     
@@ -184,6 +206,16 @@ function getOrCreateBatchConversation($admin_id, $batch_id) {
     $result = $stmt->fetch(PDO::FETCH_ASSOC);
     
     if ($result) {
+        // Reactivate if it was deactivated
+        $query = "UPDATE chat_conversations SET is_active = TRUE WHERE id = ?";
+        $stmt = $db->prepare($query);
+        $stmt->execute([$result['id']]);
+        
+        // Reactivate participants
+        $query = "UPDATE chat_participants SET is_active = TRUE WHERE conversation_id = ?";
+        $stmt = $db->prepare($query);
+        $stmt->execute([$result['id']]);
+        
         return $result['id'];
     }
     
@@ -212,7 +244,9 @@ function getOrCreateBatchConversation($admin_id, $batch_id) {
 function addParticipant($conversation_id, $user_id) {
     global $db;
     
-    $query = "INSERT IGNORE INTO chat_participants (conversation_id, user_id) VALUES (?, ?)";
+    $query = "INSERT INTO chat_participants (conversation_id, user_id) 
+              VALUES (?, ?)
+              ON DUPLICATE KEY UPDATE is_active = TRUE";
     $stmt = $db->prepare($query);
     $stmt->execute([$conversation_id, $user_id]);
     
@@ -260,4 +294,71 @@ function formatFileSize($bytes) {
     $sizes = ['Bytes', 'KB', 'MB', 'GB'];
     $i = floor(log($bytes) / log($k));
     return round($bytes / pow($k, $i), 2) . ' ' . $sizes[$i];
+}
+
+function deleteConversation($conversation_id, $user_id) {
+    global $db;
+    
+    try {
+        $db->beginTransaction();
+        
+        // Verify user is a participant in this conversation
+        $query = "SELECT 1 FROM chat_participants 
+                  WHERE conversation_id = ? AND user_id = ?";
+        $stmt = $db->prepare($query);
+        $stmt->execute([$conversation_id, $user_id]);
+        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        if (!$result) {
+            throw new Exception("Unauthorized to delete this conversation");
+        }
+        
+        // For individual conversations, deactivate the conversation
+        $query = "SELECT conversation_type, admin_id FROM chat_conversations 
+                  WHERE id = ?";
+        $stmt = $db->prepare($query);
+        $stmt->execute([$conversation_id]);
+        $conversation = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        if (!$conversation) {
+            throw new Exception("Conversation not found");
+        }
+        
+        if ($conversation['conversation_type'] === 'admin_student') {
+            // For admin-student conversations, deactivate the conversation
+            $query = "UPDATE chat_conversations SET is_active = FALSE WHERE id = ?";
+            $stmt = $db->prepare($query);
+            $stmt->execute([$conversation_id]);
+            
+            // Deactivate all participants
+            $query = "UPDATE chat_participants SET is_active = FALSE WHERE conversation_id = ?";
+            $stmt = $db->prepare($query);
+            $stmt->execute([$conversation_id]);
+        } else {
+            // For batch conversations, just remove the current user
+            $query = "UPDATE chat_participants SET is_active = FALSE 
+                      WHERE conversation_id = ? AND user_id = ?";
+            $stmt = $db->prepare($query);
+            $stmt->execute([$conversation_id, $user_id]);
+            
+            // Check if admin is leaving
+            if ($user_id == $conversation['admin_id']) {
+                // If admin is leaving, deactivate the whole conversation
+                $query = "UPDATE chat_conversations SET is_active = FALSE WHERE id = ?";
+                $stmt = $db->prepare($query);
+                $stmt->execute([$conversation_id]);
+                
+                // Deactivate all participants
+                $query = "UPDATE chat_participants SET is_active = FALSE WHERE conversation_id = ?";
+                $stmt = $db->prepare($query);
+                $stmt->execute([$conversation_id]);
+            }
+        }
+        
+        $db->commit();
+        return true;
+    } catch (Exception $e) {
+        $db->rollBack();
+        throw $e;
+    }
 }

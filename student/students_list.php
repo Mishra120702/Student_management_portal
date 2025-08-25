@@ -316,10 +316,10 @@ try {
                         <tbody class="bg-white divide-y divide-gray-200">
                             <?php foreach ($students as $student): ?>
                                 <tr class="student-row hover:bg-gray-50">
-                                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900"><a href="student_view.php?id=<?= htmlspecialchars($student['student_id']) ?>">
                                         <?= htmlspecialchars($student['student_id']) ?>
                                     </td>
-                                    <td class="px-6 py-4 whitespace-nowrap">
+                                    <td class="px-6 py-4 whitespace-nowrap"><a href="student_view.php?id=<?= htmlspecialchars($student['student_id']) ?>">
                                         <div class="text-sm font-medium text-gray-900">
                                             <?= htmlspecialchars($student['first_name'] . ' ' . $student['last_name']) ?>
                                         </div>
@@ -327,11 +327,11 @@ try {
                                             <?= htmlspecialchars($student['date_of_birth'] ? date('M d, Y', strtotime($student['date_of_birth'])) : 'N/A') ?>
                                         </div>
                                     </td>
-                                    <td class="px-6 py-4 whitespace-nowrap">
+                                    <td class="px-6 py-4 whitespace-nowrap"><a href="student_view.php?id=<?= htmlspecialchars($student['student_id']) ?>">
                                         <div class="text-sm text-gray-900"><?= htmlspecialchars($student['email'] ?: 'N/A') ?></div>
                                         <div class="text-sm text-gray-500"><?= htmlspecialchars($student['phone_number'] ?: 'N/A') ?></div>
                                     </td>
-                                    <td class="px-6 py-4 whitespace-nowrap">
+                                    <td class="px-6 py-4 whitespace-nowrap"><a href="student_view.php?id=<?= htmlspecialchars($student['student_id']) ?>">
                                         <?php if ($student['batch_id']): ?>
                                             <div class="text-sm text-gray-900"><?= htmlspecialchars($student['batch_id']) ?></div>
                                             <div class="text-sm text-gray-500">
@@ -341,10 +341,10 @@ try {
                                             <span class="text-sm text-gray-500">No batch assigned</span>
                                         <?php endif; ?>
                                     </td>
-                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500"><a href="student_view.php?id=<?= htmlspecialchars($student['student_id']) ?>">
                                         <?= htmlspecialchars($student['course_name'] ?: 'N/A') ?>
                                     </td>
-                                    <td class="px-6 py-4 whitespace-nowrap">
+                                    <td class="px-6 py-4 whitespace-nowrap"><a href="student_view.php?id=<?= htmlspecialchars($student['student_id']) ?>">
                                         <span class="px-2 py-1 text-xs rounded-full 
                                             <?= $student['current_status'] == 'active' ? 'bg-green-100 text-green-800' : 
                                                ($student['current_status'] == 'inactive' ? 'bg-red-100 text-red-800' : 

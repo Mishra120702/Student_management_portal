@@ -3,7 +3,7 @@ function getTrainerPhoto($trainer) {
     if (!empty($trainer['profile_picture'])) {
         return $trainer['profile_picture'];
     }
-    return '/assets/images/default-trainer.jpg';
+    return '../assets/images/default-trainer.jpg';
 }
 
 function getTrainerSpecializations() {

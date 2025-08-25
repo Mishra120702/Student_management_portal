@@ -401,7 +401,7 @@ try {
 </head>
 <body class="bg-gray-50 font-sans antialiased">
     <!-- Sidebar -->
-    <?php // include '../t_sidebar.php'; ?>
+    <?php //include '../t_sidebar.php'; ?>
     <!-- Main Content -->
     <div class="main-content content-expanded min-h-screen">
         <!-- Header -->
